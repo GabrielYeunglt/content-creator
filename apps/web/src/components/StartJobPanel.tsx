@@ -18,7 +18,7 @@ export function StartJobPanel() {
   return (
     <section>
       <h2>Start Job</h2>
-      <p>Enter a starting URL. Profile selection and crawl execution will be added in next steps.</p>
+      <p>Enter a starting URL. Profile selection is now available in Profile Manager. Crawl execution will be added in next steps.</p>
       <form onSubmit={handleSubmit} style={{ display: 'flex', gap: '0.5rem', maxWidth: '640px' }}>
         <input
           type="url"

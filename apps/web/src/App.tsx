@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ProfileManagerPanel } from './components/ProfileManagerPanel';
 import { SettingsPanel } from './components/SettingsPanel';
 import { StartJobPanel } from './components/StartJobPanel';
 
@@ -10,15 +11,6 @@ const sections: Array<{ id: AppSection; label: string }> = [
   { id: 'settings', label: 'Settings' },
   { id: 'results', label: 'Results' }
 ];
-
-function ProfileManagerPlaceholder() {
-  return (
-    <section>
-      <h2>Profile Manager</h2>
-      <p>V1 step 1 includes project scaffold + settings. Profile CRUD UI comes next.</p>
-    </section>
-  );
-}
 
 function ResultsPlaceholder() {
   return (
@@ -35,7 +27,7 @@ export function App() {
   return (
     <main style={{ fontFamily: 'sans-serif', margin: '2rem', maxWidth: '960px' }}>
       <h1>Content Creator</h1>
-      <p>V1 Step 1: baseline application shell with settings persistence and reset defaults.</p>
+      <p>V1 Step 2: profile manager with manual CSS/XPath rules and next-page selector setup.</p>
 
       <nav style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
         {sections.map((section) => (
@@ -55,7 +47,7 @@ export function App() {
       </nav>
 
       {activeSection === 'start-job' && <StartJobPanel />}
-      {activeSection === 'profile-manager' && <ProfileManagerPlaceholder />}
+      {activeSection === 'profile-manager' && <ProfileManagerPanel />}
       {activeSection === 'settings' && <SettingsPanel />}
       {activeSection === 'results' && <ResultsPlaceholder />}
     </main>
