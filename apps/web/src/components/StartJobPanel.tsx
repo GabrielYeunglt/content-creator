@@ -1,5 +1,5 @@
 import { useMemo, useState, type FormEvent } from 'react';
-import { runSinglePageJob } from '../lib/jobRunner';
+import { runCrawlJob } from '../lib/jobRunner';
 import { appendJob } from '../lib/jobStorage';
 import type { JobRecord } from '../types/job';
 import type { WebsiteProfile } from '../types/profile';
@@ -60,20 +60,20 @@ export function StartJobPanel({ profiles, onJobCreated }: StartJobPanelProps) {
       startUrl: startUrl.trim(),
       status: 'queued',
       createdAt: now,
-      note: 'Queued for single-page fetch/extraction.'
+      note: 'Queued for crawl execution.'
     };
 
     const queuedJobs = appendJob(newJob);
     onJobCreated(queuedJobs);
-    setMessage('Job queued. Running single-page fetch + extraction...');
+    setMessage('Job queued. Running crawl loop...');
 
     try {
-      await runSinglePageJob(newJob.id, {
+      await runCrawlJob(newJob.id, {
         onJobsUpdated: onJobCreated,
         profile: selectedProfile,
         startUrl: startUrl.trim()
       });
-      setMessage('Single-page run finished. Check Results for extracted preview and next URL.');
+      setMessage('Crawl run finished. Check Results for pages processed, preview, and stop reason.');
     } finally {
       setIsSubmitting(false);
     }
@@ -114,7 +114,7 @@ export function StartJobPanel({ profiles, onJobCreated }: StartJobPanelProps) {
         </label>
 
         <button type="submit" disabled={isSubmitting || profiles.length === 0}>
-          {isSubmitting ? 'Running...' : 'Start Single-Page Job'}
+          {isSubmitting ? 'Running...' : 'Start Crawl Job'}
         </button>
       </form>
 

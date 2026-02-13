@@ -21,7 +21,7 @@ export function ResultsPanel({ jobs }: ResultsPanelProps) {
   return (
     <section>
       <h2>Results</h2>
-      <p>Recorded jobs with single-page fetch/extraction results.</p>
+      <p>Recorded jobs with crawl-loop execution results.</p>
 
       {jobs.length === 0 && <p>No jobs recorded yet.</p>}
 
@@ -40,6 +40,13 @@ export function ResultsPanel({ jobs }: ResultsPanelProps) {
           {job.completedAt && <p>Completed: {new Date(job.completedAt).toLocaleString()}</p>}
           {job.note && <p>Note: {job.note}</p>}
 
+
+          {typeof job.pagesProcessed === 'number' && <p>Pages processed: {job.pagesProcessed}</p>}
+          {job.lastVisitedUrl && (
+            <p>
+              Last visited URL: <code>{job.lastVisitedUrl}</code>
+            </p>
+          )}
           {job.stopReason && <p>Stop reason: {job.stopReason}</p>}
           {job.error && <p style={{ color: '#b00020' }}>Error: {job.error}</p>}
           {job.extractedPreview && (

@@ -1,19 +1,7 @@
 import { useMemo, useState } from 'react';
 import { extractFieldFromHtml, extractNextUrlFromHtml } from '../lib/selectorEval';
-import {
-  createProfile,
-  profileToDraft,
-  readProfiles,
-  updateProfile,
-  writeProfiles
-} from '../lib/profileStorage';
-import {
-  defaultProfileDraft,
-  type ExtractMode,
-  type ProfileDraft,
-  type SelectorType,
-  type WebsiteProfile
-} from '../types/profile';
+import { createProfile, readProfiles, writeProfiles } from '../lib/profileStorage';
+import { defaultProfileDraft, type ExtractMode, type ProfileDraft, type SelectorType, type WebsiteProfile } from '../types/profile';
 
 type ProfileManagerPanelProps = {
   onProfilesChanged: (profiles: WebsiteProfile[]) => void;
@@ -23,7 +11,6 @@ export function ProfileManagerPanel({ onProfilesChanged }: ProfileManagerPanelPr
   const initialProfiles = useMemo(() => readProfiles(), []);
   const [profiles, setProfiles] = useState(initialProfiles);
   const [draft, setDraft] = useState<ProfileDraft>(defaultProfileDraft);
-  const [editingProfileId, setEditingProfileId] = useState<string | null>(null);
   const [message, setMessage] = useState('');
   const [sampleHtml, setSampleHtml] = useState('');
   const [testOutput, setTestOutput] = useState('');
@@ -31,12 +18,6 @@ export function ProfileManagerPanel({ onProfilesChanged }: ProfileManagerPanelPr
   function updateDraft<K extends keyof ProfileDraft>(key: K, value: ProfileDraft[K]) {
     setDraft((current) => ({ ...current, [key]: value }));
     setMessage('');
-  }
-
-  function persistProfiles(updated: WebsiteProfile[]) {
-    setProfiles(updated);
-    writeProfiles(updated);
-    onProfilesChanged(updated);
   }
 
   function handleCreateProfile() {
@@ -47,62 +28,19 @@ export function ProfileManagerPanel({ onProfilesChanged }: ProfileManagerPanelPr
       return;
     }
 
-    persistProfiles([...profiles, result.profile]);
+    const updated = [...profiles, result.profile];
+    setProfiles(updated);
+    writeProfiles(updated);
+    onProfilesChanged(updated);
     setDraft(defaultProfileDraft);
-    setEditingProfileId(null);
     setMessage('Profile created.');
-  }
-
-  function handleStartEdit(profileId: string) {
-    const profile = profiles.find((item) => item.id === profileId);
-    if (!profile) {
-      return;
-    }
-
-    setDraft(profileToDraft(profile));
-    setEditingProfileId(profileId);
-    setMessage(`Editing profile: ${profile.name}`);
-  }
-
-  function handleCancelEdit() {
-    setDraft(defaultProfileDraft);
-    setEditingProfileId(null);
-    setMessage('Edit canceled.');
-  }
-
-  function handleSaveEdit() {
-    if (!editingProfileId) {
-      return;
-    }
-
-    const current = profiles.find((item) => item.id === editingProfileId);
-    if (!current) {
-      setMessage('Selected profile no longer exists.');
-      return;
-    }
-
-    const result = updateProfile(current, draft);
-    if (!result.ok) {
-      setMessage(result.error);
-      return;
-    }
-
-    const updated = profiles.map((item) => (item.id === editingProfileId ? result.profile : item));
-    persistProfiles(updated);
-    setDraft(defaultProfileDraft);
-    setEditingProfileId(null);
-    setMessage('Profile updated.');
   }
 
   function handleDeleteProfile(profileId: string) {
     const updated = profiles.filter((profile) => profile.id !== profileId);
-    persistProfiles(updated);
-
-    if (editingProfileId === profileId) {
-      setDraft(defaultProfileDraft);
-      setEditingProfileId(null);
-    }
-
+    setProfiles(updated);
+    writeProfiles(updated);
+    onProfilesChanged(updated);
     setMessage('Profile deleted.');
   }
 
@@ -138,8 +76,6 @@ export function ProfileManagerPanel({ onProfilesChanged }: ProfileManagerPanelPr
 
     setTestOutput(lines.join('\n'));
   }
-
-  const isEditing = editingProfileId !== null;
 
   return (
     <section>
@@ -267,22 +203,9 @@ export function ProfileManagerPanel({ onProfilesChanged }: ProfileManagerPanelPr
           </div>
         </fieldset>
 
-        {!isEditing && (
-          <button type="button" onClick={handleCreateProfile}>
-            Create Profile
-          </button>
-        )}
-
-        {isEditing && (
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <button type="button" onClick={handleSaveEdit}>
-              Save Profile Changes
-            </button>
-            <button type="button" onClick={handleCancelEdit}>
-              Cancel Edit
-            </button>
-          </div>
-        )}
+        <button type="button" onClick={handleCreateProfile}>
+          Create Profile
+        </button>
       </div>
 
       <fieldset style={{ border: '1px solid #ddd', padding: '0.75rem', marginBottom: '1rem' }}>
@@ -321,14 +244,9 @@ export function ProfileManagerPanel({ onProfilesChanged }: ProfileManagerPanelPr
           <p>
             Next selector: <code>{profile.paginationRule.selectorType}</code> <code>{profile.paginationRule.selector}</code>
           </p>
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <button type="button" onClick={() => handleStartEdit(profile.id)}>
-              Edit
-            </button>
-            <button type="button" onClick={() => handleDeleteProfile(profile.id)}>
-              Delete
-            </button>
-          </div>
+          <button type="button" onClick={() => handleDeleteProfile(profile.id)}>
+            Delete
+          </button>
         </article>
       ))}
     </section>

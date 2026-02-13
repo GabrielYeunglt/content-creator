@@ -27,7 +27,7 @@ export function App() {
   return (
     <main style={{ fontFamily: 'sans-serif', margin: '2rem', maxWidth: '960px' }}>
       <h1>Content Creator</h1>
-      <p>V1 Step 5: start job performs real single-page fetch and extraction with status transitions.</p>
+      <p>V1 Step 6: crawl runner supports multi-page loop with stop rules and domain guard.</p>
 
       <nav style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
         {sections.map((section) => (
