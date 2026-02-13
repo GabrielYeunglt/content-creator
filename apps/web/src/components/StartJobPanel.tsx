@@ -83,6 +83,7 @@ export function StartJobPanel({ profiles, onJobCreated }: StartJobPanelProps) {
     <section>
       <h2>Start Job</h2>
       <p>Pick a profile, enter a starting URL, and validate strict in-domain matching.</p>
+      <p style={{ color: '#8a4f00' }}>Note: direct browser fetch may fail on some websites due to CORS until desktop/backend fetch is wired.</p>
 
       <form onSubmit={handleSubmit} style={{ display: 'grid', gap: '0.75rem', maxWidth: '680px' }}>
         <label>

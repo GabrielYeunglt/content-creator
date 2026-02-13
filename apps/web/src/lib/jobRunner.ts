@@ -93,12 +93,19 @@ export async function runSinglePageJob(jobId: string, options: RunnerOptions): P
     onJobsUpdated(completed);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
+    const looksLikeCorsFailure =
+      message.toLowerCase().includes('failed to fetch') ||
+      message.toLowerCase().includes('networkerror') ||
+      message.toLowerCase().includes('load failed');
+
     const failed = updateJob(jobId, {
       status: 'failed',
       completedAt: new Date().toISOString(),
-      stopReason: 'network-or-parse-error',
+      stopReason: looksLikeCorsFailure ? 'browser-fetch-blocked' : 'network-or-parse-error',
       error: message,
-      note: 'Failed to fetch or process page.'
+      note: looksLikeCorsFailure
+        ? 'Browser fetch was blocked (likely CORS). In desktop mode, move fetch/extract to backend runtime.'
+        : 'Failed to fetch or process page.'
     });
     onJobsUpdated(failed);
   }
