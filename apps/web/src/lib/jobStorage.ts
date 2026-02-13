@@ -27,24 +27,25 @@ export function appendJob(job: JobRecord): JobRecord[] {
   return updated;
 }
 
-export function updateJobStatus(
-  jobId: string,
-  status: JobStatus,
-  note?: string
-): JobRecord[] {
+export function updateJobStatus(jobId: string, status: JobStatus, note?: string): JobRecord[] {
+  return updateJob(jobId, {
+    status,
+    note,
+    completedAt: status === 'completed' || status === 'failed' ? new Date().toISOString() : undefined
+  });
+}
+
+export function updateJob(jobId: string, patch: Partial<JobRecord>): JobRecord[] {
   const jobs = readJobs();
   const updated = jobs.map((job) => {
     if (job.id !== jobId) {
       return job;
     }
 
-    const isTerminal = status === 'completed' || status === 'failed';
-
     return {
       ...job,
-      status,
-      completedAt: isTerminal ? new Date().toISOString() : job.completedAt,
-      note: note ?? job.note
+      ...patch,
+      completedAt: patch.completedAt ?? job.completedAt
     };
   });
 

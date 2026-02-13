@@ -21,7 +21,7 @@ export function ResultsPanel({ jobs }: ResultsPanelProps) {
   return (
     <section>
       <h2>Results</h2>
-      <p>Recorded jobs (temporary v1 scaffold until crawler/export pipeline is connected).</p>
+      <p>Recorded jobs with single-page fetch/extraction results.</p>
 
       {jobs.length === 0 && <p>No jobs recorded yet.</p>}
 
@@ -39,6 +39,19 @@ export function ResultsPanel({ jobs }: ResultsPanelProps) {
           <p>Created: {new Date(job.createdAt).toLocaleString()}</p>
           {job.completedAt && <p>Completed: {new Date(job.completedAt).toLocaleString()}</p>}
           {job.note && <p>Note: {job.note}</p>}
+
+          {job.stopReason && <p>Stop reason: {job.stopReason}</p>}
+          {job.error && <p style={{ color: '#b00020' }}>Error: {job.error}</p>}
+          {job.extractedPreview && (
+            <p>
+              Extracted preview: <code>{job.extractedPreview}</code>
+            </p>
+          )}
+          {job.nextUrl && (
+            <p>
+              Next URL: <code>{job.nextUrl}</code>
+            </p>
+          )}
         </article>
       ))}
     </section>

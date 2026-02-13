@@ -15,4 +15,8 @@ export type JobRecord = {
   createdAt: string;
   completedAt?: string;
   note?: string;
+  extractedPreview?: string;
+  nextUrl?: string;
+  stopReason?: string;
+  error?: string;
 };

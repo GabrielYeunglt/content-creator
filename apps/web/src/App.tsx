@@ -27,7 +27,7 @@ export function App() {
   return (
     <main style={{ fontFamily: 'sans-serif', margin: '2rem', maxWidth: '960px' }}>
       <h1>Content Creator</h1>
-      <p>V1 Step 4: start job now queues and transitions through scaffold run statuses.</p>
+      <p>V1 Step 5: start job performs real single-page fetch and extraction with status transitions.</p>
 
       <nav style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
         {sections.map((section) => (

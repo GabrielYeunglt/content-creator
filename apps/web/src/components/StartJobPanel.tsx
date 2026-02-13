@@ -1,5 +1,5 @@
 import { useMemo, useState, type FormEvent } from 'react';
-import { runScaffoldJob } from '../lib/jobRunner';
+import { runSinglePageJob } from '../lib/jobRunner';
 import { appendJob } from '../lib/jobStorage';
 import type { JobRecord } from '../types/job';
 import type { WebsiteProfile } from '../types/profile';
@@ -60,16 +60,20 @@ export function StartJobPanel({ profiles, onJobCreated }: StartJobPanelProps) {
       startUrl: startUrl.trim(),
       status: 'queued',
       createdAt: now,
-      note: 'Queued for scaffold runner.'
+      note: 'Queued for single-page fetch/extraction.'
     };
 
     const queuedJobs = appendJob(newJob);
     onJobCreated(queuedJobs);
-    setMessage('Job queued. Running scaffold orchestrator...');
+    setMessage('Job queued. Running single-page fetch + extraction...');
 
     try {
-      await runScaffoldJob(newJob.id, { onJobsUpdated: onJobCreated });
-      setMessage('Scaffold run completed. Next step: connect real crawler engine.');
+      await runSinglePageJob(newJob.id, {
+        onJobsUpdated: onJobCreated,
+        profile: selectedProfile,
+        startUrl: startUrl.trim()
+      });
+      setMessage('Single-page run finished. Check Results for extracted preview and next URL.');
     } finally {
       setIsSubmitting(false);
     }
@@ -79,6 +83,7 @@ export function StartJobPanel({ profiles, onJobCreated }: StartJobPanelProps) {
     <section>
       <h2>Start Job</h2>
       <p>Pick a profile, enter a starting URL, and validate strict in-domain matching.</p>
+      <p style={{ color: '#8a4f00' }}>Note: direct browser fetch may fail on some websites due to CORS until desktop/backend fetch is wired.</p>
 
       <form onSubmit={handleSubmit} style={{ display: 'grid', gap: '0.75rem', maxWidth: '680px' }}>
         <label>
@@ -109,7 +114,7 @@ export function StartJobPanel({ profiles, onJobCreated }: StartJobPanelProps) {
         </label>
 
         <button type="submit" disabled={isSubmitting || profiles.length === 0}>
-          {isSubmitting ? 'Running...' : 'Start Job'}
+          {isSubmitting ? 'Running...' : 'Start Single-Page Job'}
         </button>
       </form>
 
