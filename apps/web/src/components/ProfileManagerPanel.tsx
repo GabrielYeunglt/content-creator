@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { extractFieldFromHtml, extractNextUrlFromHtml } from '../lib/selectorEval';
 import { createProfile, readProfiles, writeProfiles } from '../lib/profileStorage';
 import { defaultProfileDraft, type ExtractMode, type ProfileDraft, type SelectorType, type WebsiteProfile } from '../types/profile';
 
@@ -11,6 +12,8 @@ export function ProfileManagerPanel({ onProfilesChanged }: ProfileManagerPanelPr
   const [profiles, setProfiles] = useState(initialProfiles);
   const [draft, setDraft] = useState<ProfileDraft>(defaultProfileDraft);
   const [message, setMessage] = useState('');
+  const [sampleHtml, setSampleHtml] = useState('');
+  const [testOutput, setTestOutput] = useState('');
 
   function updateDraft<K extends keyof ProfileDraft>(key: K, value: ProfileDraft[K]) {
     setDraft((current) => ({ ...current, [key]: value }));
@@ -39,6 +42,39 @@ export function ProfileManagerPanel({ onProfilesChanged }: ProfileManagerPanelPr
     writeProfiles(updated);
     onProfilesChanged(updated);
     setMessage('Profile deleted.');
+  }
+
+  function handleRunSelectorTest() {
+    if (!sampleHtml.trim()) {
+      setTestOutput('Paste sample HTML to run selector test.');
+      return;
+    }
+
+    const contentResult = extractFieldFromHtml({
+      html: sampleHtml,
+      selectorType: draft.selectorType,
+      selector: draft.selector,
+      extractMode: draft.extractMode,
+      attributeName: draft.contentAttributeName
+    });
+
+    const nextResult = extractNextUrlFromHtml({
+      html: sampleHtml,
+      selectorType: draft.nextSelectorType,
+      selector: draft.nextSelector,
+      attributeName: draft.nextAttributeName
+    });
+
+    const lines = [
+      contentResult.ok
+        ? `Content selector result: ${contentResult.value || '[empty]'}`
+        : `Content selector error: ${contentResult.error}`,
+      nextResult.ok
+        ? `Next selector result: ${nextResult.value || '[empty]'}`
+        : `Next selector error: ${nextResult.error}`
+    ];
+
+    setTestOutput(lines.join('\n'));
   }
 
   return (
@@ -106,6 +142,15 @@ export function ProfileManagerPanel({ onProfilesChanged }: ProfileManagerPanelPr
               </select>
             </label>
 
+            <label>
+              Content Attribute (for attribute mode)
+              <input
+                value={draft.contentAttributeName}
+                onChange={(event) => updateDraft('contentAttributeName', event.target.value)}
+                style={{ width: '100%' }}
+              />
+            </label>
+
             <label style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
               <input
                 type="checkbox"
@@ -162,6 +207,27 @@ export function ProfileManagerPanel({ onProfilesChanged }: ProfileManagerPanelPr
           Create Profile
         </button>
       </div>
+
+      <fieldset style={{ border: '1px solid #ddd', padding: '0.75rem', marginBottom: '1rem' }}>
+        <legend>Selector Test (sample HTML)</legend>
+        <p style={{ marginTop: 0 }}>Paste sample page HTML to quickly test current selector inputs.</p>
+        <textarea
+          value={sampleHtml}
+          onChange={(event) => setSampleHtml(event.target.value)}
+          style={{ width: '100%', minHeight: '140px', fontFamily: 'monospace' }}
+          placeholder="<html>...</html>"
+        />
+        <div style={{ marginTop: '0.5rem' }}>
+          <button type="button" onClick={handleRunSelectorTest}>
+            Run Selector Test
+          </button>
+        </div>
+        {testOutput && (
+          <pre style={{ whiteSpace: 'pre-wrap', background: '#f7f7f7', padding: '0.5rem', marginTop: '0.75rem' }}>
+            {testOutput}
+          </pre>
+        )}
+      </fieldset>
 
       {message && <p>{message}</p>}
 

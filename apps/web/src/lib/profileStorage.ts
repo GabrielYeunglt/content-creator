@@ -99,6 +99,7 @@ export function createProfile(draft: ProfileDraft): { ok: true; profile: Website
         selectorType: draft.selectorType,
         selector: draft.selector.trim(),
         extractMode: draft.extractMode,
+        attributeName: draft.contentAttributeName.trim() || 'href',
         required: draft.required
       }
     ],

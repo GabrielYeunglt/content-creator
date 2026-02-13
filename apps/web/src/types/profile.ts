@@ -52,6 +52,7 @@ export const defaultProfileDraft = {
   selector: defaultSelectorRule.selector,
   extractMode: defaultSelectorRule.extractMode,
   required: defaultSelectorRule.required,
+  contentAttributeName: 'href',
   nextSelectorType: 'css' as SelectorType,
   nextSelector: '',
   nextAttributeName: 'href',
