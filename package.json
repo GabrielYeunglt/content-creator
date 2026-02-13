@@ -1,0 +1,16 @@
+{
+  "name": "content-creator",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Experimental profile-driven content scraper with PDF/EPUB export",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:web": "npm --workspace @content-creator/web run dev",
+    "build:web": "npm --workspace @content-creator/web run build",
+    "typecheck": "npm run -ws typecheck",
+    "lint": "npm run -ws lint"
+  }
+}
