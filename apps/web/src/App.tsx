@@ -1,7 +1,12 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ProfileManagerPanel } from './components/ProfileManagerPanel';
+import { ResultsPanel } from './components/ResultsPanel';
 import { SettingsPanel } from './components/SettingsPanel';
 import { StartJobPanel } from './components/StartJobPanel';
+import { readJobs } from './lib/jobStorage';
+import { readProfiles } from './lib/profileStorage';
+import type { JobRecord } from './types/job';
+import type { WebsiteProfile } from './types/profile';
 
 type AppSection = 'start-job' | 'profile-manager' | 'settings' | 'results';
 
@@ -12,22 +17,17 @@ const sections: Array<{ id: AppSection; label: string }> = [
   { id: 'results', label: 'Results' }
 ];
 
-function ResultsPlaceholder() {
-  return (
-    <section>
-      <h2>Results</h2>
-      <p>Job history and export artifacts will be implemented after crawler orchestration.</p>
-    </section>
-  );
-}
-
 export function App() {
+  const initialProfiles = useMemo(() => readProfiles(), []);
+  const initialJobs = useMemo(() => readJobs(), []);
   const [activeSection, setActiveSection] = useState<AppSection>('start-job');
+  const [profiles, setProfiles] = useState<WebsiteProfile[]>(initialProfiles);
+  const [jobs, setJobs] = useState<JobRecord[]>(initialJobs);
 
   return (
     <main style={{ fontFamily: 'sans-serif', margin: '2rem', maxWidth: '960px' }}>
       <h1>Content Creator</h1>
-      <p>V1 Step 2: profile manager with manual CSS/XPath rules and next-page selector setup.</p>
+      <p>V1 Step 3: start job flow now uses saved profiles and records job history.</p>
 
       <nav style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
         {sections.map((section) => (
@@ -46,10 +46,10 @@ export function App() {
         ))}
       </nav>
 
-      {activeSection === 'start-job' && <StartJobPanel />}
-      {activeSection === 'profile-manager' && <ProfileManagerPanel />}
+      {activeSection === 'start-job' && <StartJobPanel profiles={profiles} onJobCreated={setJobs} />}
+      {activeSection === 'profile-manager' && <ProfileManagerPanel onProfilesChanged={setProfiles} />}
       {activeSection === 'settings' && <SettingsPanel />}
-      {activeSection === 'results' && <ResultsPlaceholder />}
+      {activeSection === 'results' && <ResultsPanel jobs={jobs} />}
     </main>
   );
 }

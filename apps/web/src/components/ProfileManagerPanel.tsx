@@ -1,8 +1,12 @@
 import { useMemo, useState } from 'react';
 import { createProfile, readProfiles, writeProfiles } from '../lib/profileStorage';
-import { defaultProfileDraft, type ExtractMode, type ProfileDraft, type SelectorType } from '../types/profile';
+import { defaultProfileDraft, type ExtractMode, type ProfileDraft, type SelectorType, type WebsiteProfile } from '../types/profile';
 
-export function ProfileManagerPanel() {
+type ProfileManagerPanelProps = {
+  onProfilesChanged: (profiles: WebsiteProfile[]) => void;
+};
+
+export function ProfileManagerPanel({ onProfilesChanged }: ProfileManagerPanelProps) {
   const initialProfiles = useMemo(() => readProfiles(), []);
   const [profiles, setProfiles] = useState(initialProfiles);
   const [draft, setDraft] = useState<ProfileDraft>(defaultProfileDraft);
@@ -24,6 +28,7 @@ export function ProfileManagerPanel() {
     const updated = [...profiles, result.profile];
     setProfiles(updated);
     writeProfiles(updated);
+    onProfilesChanged(updated);
     setDraft(defaultProfileDraft);
     setMessage('Profile created.');
   }
@@ -32,6 +37,7 @@ export function ProfileManagerPanel() {
     const updated = profiles.filter((profile) => profile.id !== profileId);
     setProfiles(updated);
     writeProfiles(updated);
+    onProfilesChanged(updated);
     setMessage('Profile deleted.');
   }
 
