@@ -1,4 +1,5 @@
 import { useMemo, useState, type FormEvent } from 'react';
+import { runScaffoldJob } from '../lib/jobRunner';
 import { appendJob } from '../lib/jobStorage';
 import type { JobRecord } from '../types/job';
 import type { WebsiteProfile } from '../types/profile';
@@ -20,13 +21,14 @@ export function StartJobPanel({ profiles, onJobCreated }: StartJobPanelProps) {
   const [startUrl, setStartUrl] = useState('');
   const [selectedProfileId, setSelectedProfileId] = useState('');
   const [message, setMessage] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const selectedProfile = useMemo(
     () => profiles.find((profile) => profile.id === selectedProfileId),
     [profiles, selectedProfileId]
   );
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const hostname = hostFromUrl(startUrl.trim());
@@ -47,6 +49,8 @@ export function StartJobPanel({ profiles, onJobCreated }: StartJobPanelProps) {
       return;
     }
 
+    setIsSubmitting(true);
+
     const now = new Date().toISOString();
     const newJob: JobRecord = {
       id: crypto.randomUUID(),
@@ -54,15 +58,21 @@ export function StartJobPanel({ profiles, onJobCreated }: StartJobPanelProps) {
       profileName: selectedProfile.name,
       profileDomain: selectedProfile.domain,
       startUrl: startUrl.trim(),
-      status: 'completed',
+      status: 'queued',
       createdAt: now,
-      completedAt: now,
-      note: 'V1 scaffold: crawl runner will be connected next.'
+      note: 'Queued for scaffold runner.'
     };
 
-    const jobs = appendJob(newJob);
-    onJobCreated(jobs);
-    setMessage('Job recorded. Next step will execute crawler orchestration.');
+    const queuedJobs = appendJob(newJob);
+    onJobCreated(queuedJobs);
+    setMessage('Job queued. Running scaffold orchestrator...');
+
+    try {
+      await runScaffoldJob(newJob.id, { onJobsUpdated: onJobCreated });
+      setMessage('Scaffold run completed. Next step: connect real crawler engine.');
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -98,7 +108,9 @@ export function StartJobPanel({ profiles, onJobCreated }: StartJobPanelProps) {
           />
         </label>
 
-        <button type="submit">Start (record job)</button>
+        <button type="submit" disabled={isSubmitting || profiles.length === 0}>
+          {isSubmitting ? 'Running...' : 'Start Job'}
+        </button>
       </form>
 
       {profiles.length === 0 && (

@@ -1,8 +1,21 @@
-import type { JobRecord } from '../types/job';
+import type { JobRecord, JobStatus } from '../types/job';
 
 type ResultsPanelProps = {
   jobs: JobRecord[];
 };
+
+function statusColor(status: JobStatus): string {
+  if (status === 'queued') {
+    return '#8a4f00';
+  }
+  if (status === 'running') {
+    return '#0b57d0';
+  }
+  if (status === 'completed') {
+    return '#1f7a1f';
+  }
+  return '#b00020';
+}
 
 export function ResultsPanel({ jobs }: ResultsPanelProps) {
   return (
@@ -20,8 +33,11 @@ export function ResultsPanel({ jobs }: ResultsPanelProps) {
           <p>
             URL: <code>{job.startUrl}</code>
           </p>
-          <p>Status: {job.status}</p>
+          <p>
+            Status: <strong style={{ color: statusColor(job.status) }}>{job.status}</strong>
+          </p>
           <p>Created: {new Date(job.createdAt).toLocaleString()}</p>
+          {job.completedAt && <p>Completed: {new Date(job.completedAt).toLocaleString()}</p>}
           {job.note && <p>Note: {job.note}</p>}
         </article>
       ))}
