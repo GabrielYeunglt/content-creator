@@ -52,27 +52,7 @@ function sanitizeProfile(candidate: Partial<WebsiteProfile>): WebsiteProfile | n
   };
 }
 
-export function readProfiles(): WebsiteProfile[] {
-  const raw = window.localStorage.getItem(PROFILE_STORAGE_KEY);
-  if (!raw) {
-    return [];
-  }
-
-  try {
-    const parsed = JSON.parse(raw) as Array<Partial<WebsiteProfile>>;
-    return parsed
-      .map((item) => sanitizeProfile(item))
-      .filter((profile): profile is WebsiteProfile => profile !== null);
-  } catch {
-    return [];
-  }
-}
-
-export function writeProfiles(profiles: WebsiteProfile[]): void {
-  window.localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profiles));
-}
-
-export function createProfile(draft: ProfileDraft): { ok: true; profile: WebsiteProfile } | { ok: false; error: string } {
+function validateProfileDraft(draft: ProfileDraft): { ok: true } | { ok: false; error: string } {
   const domain = normalizeDomain(draft.domain);
   if (!draft.name.trim()) {
     return { ok: false, error: 'Profile name is required.' };
@@ -87,11 +67,14 @@ export function createProfile(draft: ProfileDraft): { ok: true; profile: Website
     return { ok: false, error: 'Next-page selector is required.' };
   }
 
-  const now = new Date().toISOString();
-  const profile: WebsiteProfile = {
-    id: crypto.randomUUID(),
+  return { ok: true };
+}
+
+function buildProfile(draft: ProfileDraft, id: string, createdAt: string): WebsiteProfile {
+  return {
+    id,
     name: draft.name.trim(),
-    domain,
+    domain: normalizeDomain(draft.domain),
     selectorRules: [
       {
         id: crypto.randomUUID(),
@@ -113,9 +96,70 @@ export function createProfile(draft: ProfileDraft): { ok: true; profile: Website
       stopWhenUrlVisited: true,
       maxPages: Math.max(1, draft.maxPages)
     },
-    createdAt: now,
-    updatedAt: now
+    createdAt,
+    updatedAt: new Date().toISOString()
   };
+}
 
+export function readProfiles(): WebsiteProfile[] {
+  const raw = window.localStorage.getItem(PROFILE_STORAGE_KEY);
+  if (!raw) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as Array<Partial<WebsiteProfile>>;
+    return parsed
+      .map((item) => sanitizeProfile(item))
+      .filter((profile): profile is WebsiteProfile => profile !== null);
+  } catch {
+    return [];
+  }
+}
+
+export function writeProfiles(profiles: WebsiteProfile[]): void {
+  window.localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profiles));
+}
+
+export function profileToDraft(profile: WebsiteProfile): ProfileDraft {
+  const primary = profile.selectorRules[0];
+  return {
+    name: profile.name,
+    domain: profile.domain,
+    fieldName: primary?.fieldName ?? defaultProfileDraft.fieldName,
+    selectorType: primary?.selectorType ?? defaultProfileDraft.selectorType,
+    selector: primary?.selector ?? defaultProfileDraft.selector,
+    extractMode: primary?.extractMode ?? defaultProfileDraft.extractMode,
+    required: primary?.required ?? defaultProfileDraft.required,
+    contentAttributeName: primary?.attributeName ?? defaultProfileDraft.contentAttributeName,
+    nextSelectorType: profile.paginationRule.selectorType,
+    nextSelector: profile.paginationRule.selector,
+    nextAttributeName: profile.paginationRule.attributeName,
+    maxPages: profile.stopRules.maxPages
+  };
+}
+
+export function createProfile(draft: ProfileDraft): { ok: true; profile: WebsiteProfile } | { ok: false; error: string } {
+  const validation = validateProfileDraft(draft);
+  if (!validation.ok) {
+    return validation;
+  }
+
+  const now = new Date().toISOString();
+  const profile = buildProfile(draft, crypto.randomUUID(), now);
+
+  return { ok: true, profile };
+}
+
+export function editProfile(
+  existingProfile: WebsiteProfile,
+  draft: ProfileDraft
+): { ok: true; profile: WebsiteProfile } | { ok: false; error: string } {
+  const validation = validateProfileDraft(draft);
+  if (!validation.ok) {
+    return validation;
+  }
+
+  const profile = buildProfile(draft, existingProfile.id, existingProfile.createdAt);
   return { ok: true, profile };
 }
