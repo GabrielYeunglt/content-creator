@@ -76,7 +76,7 @@ Build a profile-driven desktop/web app that crawls website content from a start 
 - Results show status, stop reason, errors, pages processed, last visited URL
 - Per-page extracted records are stored and displayed (`url`, `preview`)
 - Per-page linked asset discovery for `link[rel="stylesheet"]` and `script[src]`
-- Virtual-browser crawler module (`crawler-engine`) added to capture rendered content and JS/CSS via Playwright in backend runtime
+- Virtual-browser crawler module (`crawler-engine`) added to capture rendered content and JS/CSS via Playwright in backend runtime, including optional content-ready waits and click interaction steps
 
 ---
 

@@ -26,6 +26,13 @@ export type CrawlStopRules = {
   maxConsecutiveErrors: number;
 };
 
+export type CrawlInteractionStep = {
+  type: 'click';
+  selectorType: SelectorType;
+  selector: string;
+  timeoutMs?: number;
+};
+
 export type VirtualBrowserCrawlOptions = {
   startUrl: string;
   domain: string;
@@ -33,6 +40,12 @@ export type VirtualBrowserCrawlOptions = {
   paginationRule: CrawlPaginationRule;
   stopRules: CrawlStopRules;
   timeoutMs?: number;
+  contentReadySelector?: {
+    selectorType: SelectorType;
+    selector: string;
+    timeoutMs?: number;
+  };
+  interactionSteps?: CrawlInteractionStep[];
 };
 
 export type CrawledPage = {
@@ -48,16 +61,26 @@ export type CrawlResult = {
   pages: CrawledPage[];
 };
 
+type RequestLike = {
+  resourceType(): string;
+  url(): string;
+};
+
+type PlaywrightPageLike = {
+  goto: (url: string, opts: { waitUntil: 'networkidle'; timeout: number }) => Promise<void>;
+  on: (event: 'requestfinished', handler: (request: RequestLike) => void) => void;
+  off: (event: 'requestfinished', handler: (request: RequestLike) => void) => void;
+  evaluate: <TResult, TArg = undefined>(fn: (arg: TArg) => TResult, arg?: TArg) => Promise<TResult>;
+  waitForSelector: (selector: string, opts: { timeout: number }) => Promise<unknown>;
+  click: (selector: string, opts: { timeout: number }) => Promise<void>;
+  waitForTimeout: (timeout: number) => Promise<void>;
+};
+
 type PlaywrightLike = {
   chromium: {
     launch: (options: { headless: boolean }) => Promise<{
       newContext: () => Promise<{
-        newPage: () => Promise<{
-          goto: (url: string, opts: { waitUntil: 'networkidle'; timeout: number }) => Promise<void>;
-          on: (event: 'requestfinished', handler: (request: { resourceType(): string; url(): string }) => void) => void;
-          off: (event: 'requestfinished', handler: (request: { resourceType(): string; url(): string }) => void) => void;
-          evaluate: <TResult, TArg = undefined>(fn: (arg: TArg) => TResult, arg?: TArg) => Promise<TResult>;
-        }>;
+        newPage: () => Promise<PlaywrightPageLike>;
         close: () => Promise<void>;
       }>;
       close: () => Promise<void>;
@@ -97,6 +120,14 @@ function toAbsoluteUrl(baseUrl: string, value: string): string | null {
   }
 }
 
+function toCssSelector(selectorType: SelectorType, selector: string): string {
+  if (selectorType === 'css') {
+    return selector;
+  }
+
+  return `xpath=${selector}`;
+}
+
 export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOptions): Promise<CrawlResult> {
   const { chromium } = await loadPlaywright();
   const {
@@ -105,7 +136,9 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
     contentRule,
     paginationRule,
     stopRules,
-    timeoutMs = 30000
+    timeoutMs = 30000,
+    contentReadySelector,
+    interactionSteps = []
   } = options;
 
   const visited = new Set<string>();
@@ -135,7 +168,7 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
 
       const networkStylesheets = new Set<string>();
       const networkScripts = new Set<string>();
-      const requestHandler = (request: { resourceType(): string; url(): string }) => {
+      const requestHandler = (request: RequestLike) => {
         const type = request.resourceType();
         if (type === 'stylesheet') networkStylesheets.add(request.url());
         if (type === 'script') networkScripts.add(request.url());
@@ -145,6 +178,22 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
 
       try {
         await page.goto(currentUrl, { waitUntil: 'networkidle', timeout: timeoutMs });
+
+        for (const step of interactionSteps) {
+          if (step.type === 'click') {
+            const stepSelector = toCssSelector(step.selectorType, step.selector);
+            const stepTimeout = step.timeoutMs ?? 5000;
+            await page.waitForSelector(stepSelector, { timeout: stepTimeout });
+            await page.click(stepSelector, { timeout: stepTimeout });
+            await page.waitForTimeout(300);
+          }
+        }
+
+        if (contentReadySelector) {
+          const readySelector = toCssSelector(contentReadySelector.selectorType, contentReadySelector.selector);
+          await page.waitForSelector(readySelector, { timeout: contentReadySelector.timeoutMs ?? timeoutMs });
+        }
+
         visited.add(currentUrl);
 
         const content = await page.evaluate(
