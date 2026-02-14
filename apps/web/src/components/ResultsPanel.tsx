@@ -59,6 +59,20 @@ export function ResultsPanel({ jobs }: ResultsPanelProps) {
               Next URL: <code>{job.nextUrl}</code>
             </p>
           )}
+
+          {job.extractedPages && job.extractedPages.length > 0 && (
+            <details>
+              <summary>Extracted pages ({job.extractedPages.length})</summary>
+              <ul>
+                {job.extractedPages.map((page, index) => (
+                  <li key={`${job.id}-${index}`}>
+                    <code>{page.url}</code>
+                    <div>{page.preview}</div>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
         </article>
       ))}
     </section>

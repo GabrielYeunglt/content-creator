@@ -71,6 +71,7 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
 
   const visited = new Set<string>();
   const previews: string[] = [];
+  const extractedPages: Array<{ url: string; preview: string }> = [];
   const maxPages = Math.max(1, profile.stopRules.maxPages);
   let currentUrl: string | null = startUrl;
   let pagesProcessed = 0;
@@ -83,6 +84,7 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
         pagesProcessed,
         lastVisitedUrl: currentUrl,
         extractedPreview: previews.join('\n\n'),
+        extractedPages,
         stopReason: 'already-visited-url',
         note: 'Stopped to avoid URL loop.'
       });
@@ -97,6 +99,7 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
         pagesProcessed,
         lastVisitedUrl: currentUrl,
         extractedPreview: previews.join('\n\n'),
+        extractedPages,
         stopReason: 'max-pages-reached',
         note: `Stopped at max pages (${maxPages}).`
       });
@@ -112,6 +115,7 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
         pagesProcessed,
         lastVisitedUrl: currentUrl,
         extractedPreview: previews.join('\n\n'),
+        extractedPages,
         stopReason: 'out-of-domain-blocked',
         note: `Stopped due to strict domain policy (${profile.domain}).`
       });
@@ -139,13 +143,16 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
           lastVisitedUrl: currentUrl,
           stopReason: 'content-selector-no-match',
           error: contentResult.error,
-          note: 'Content extraction failed.'
+          note: 'Content extraction failed.',
+          extractedPages
         });
         onJobsUpdated(failed);
         return;
       }
 
-      previews.push(`Page ${pagesProcessed + 1}: ${cleanPreview(contentResult.value)}`);
+      const pagePreview = cleanPreview(contentResult.value);
+      previews.push(`Page ${pagesProcessed + 1}: ${pagePreview}`);
+      extractedPages.push({ url: currentUrl, preview: pagePreview });
       pagesProcessed += 1;
 
       const nextResult = extractNextUrlFromHtml({
@@ -161,6 +168,7 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
         pagesProcessed,
         lastVisitedUrl: currentUrl,
         extractedPreview: previews.join('\n\n'),
+        extractedPages,
         nextUrl: resolvedNext ?? '',
         note: `Processed ${pagesProcessed} page(s)...`
       });
@@ -173,6 +181,7 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
           pagesProcessed,
           lastVisitedUrl: currentUrl,
           extractedPreview: previews.join('\n\n'),
+          extractedPages,
           stopReason: 'no-next-button',
           note: 'Crawl completed: no next page found.'
         });
@@ -195,6 +204,7 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
         lastVisitedUrl: currentUrl,
         stopReason: looksLikeCorsFailure ? 'browser-fetch-blocked' : 'network-or-parse-error',
         error: message,
+        extractedPages,
         note: looksLikeCorsFailure
           ? 'Browser fetch was blocked (likely CORS). In desktop mode, move fetch/extract to backend runtime.'
           : 'Failed to fetch or process page.'

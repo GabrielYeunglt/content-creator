@@ -33,7 +33,7 @@ export function App() {
   return (
     <main style={{ fontFamily: 'sans-serif', margin: '2rem', maxWidth: '960px' }}>
       <h1>Content Creator</h1>
-      <p>V1 Step 6: crawl runner supports multi-page loop with stop rules and domain guard.</p>
+      <p>V1 Step 7: start job auto-matches profiles and results show per-page extraction details.</p>
 
       <nav style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
         {sections.map((section) => (

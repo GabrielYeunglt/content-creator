@@ -5,6 +5,11 @@ export type StartJobInput = {
   profileId: string;
 };
 
+export type ExtractedPageRecord = {
+  url: string;
+  preview: string;
+};
+
 export type JobRecord = {
   id: string;
   profileId: string;
@@ -16,6 +21,7 @@ export type JobRecord = {
   completedAt?: string;
   note?: string;
   extractedPreview?: string;
+  extractedPages?: ExtractedPageRecord[];
   nextUrl?: string;
   stopReason?: string;
   error?: string;
