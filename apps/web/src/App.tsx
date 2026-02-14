@@ -23,15 +23,12 @@ export function App() {
   const [activeSection, setActiveSection] = useState<AppSection>('start-job');
   const [profiles, setProfiles] = useState<WebsiteProfile[]>(initialProfiles);
   const [jobs, setJobs] = useState<JobRecord[]>(initialJobs);
-<<<<<<< HEAD
   const [createProfileRequestNonce, setCreateProfileRequestNonce] = useState(0);
 
   function handleRequestCreateProfile() {
     setActiveSection('profile-manager');
     setCreateProfileRequestNonce((current) => current + 1);
   }
-=======
->>>>>>> 464c1728549a4b789a601fbd934e9d42b46f818a
 
   return (
     <main style={{ fontFamily: 'sans-serif', margin: '2rem', maxWidth: '960px' }}>
@@ -55,7 +52,6 @@ export function App() {
         ))}
       </nav>
 
-<<<<<<< HEAD
       {activeSection === 'start-job' && (
         <StartJobPanel
           profiles={profiles}
@@ -69,10 +65,6 @@ export function App() {
           createProfileRequestNonce={createProfileRequestNonce}
         />
       )}
-=======
-      {activeSection === 'start-job' && <StartJobPanel profiles={profiles} onJobCreated={setJobs} />}
-      {activeSection === 'profile-manager' && <ProfileManagerPanel onProfilesChanged={setProfiles} />}
->>>>>>> 464c1728549a4b789a601fbd934e9d42b46f818a
       {activeSection === 'settings' && <SettingsPanel />}
       {activeSection === 'results' && <ResultsPanel jobs={jobs} />}
     </main>
