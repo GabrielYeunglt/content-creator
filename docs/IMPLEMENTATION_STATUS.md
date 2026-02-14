@@ -75,6 +75,7 @@ Build a profile-driven desktop/web app that crawls website content from a start 
 ### Results diagnostics
 - Results show status, stop reason, errors, pages processed, last visited URL
 - Per-page extracted records are stored and displayed (`url`, `preview`)
+- Per-page linked asset discovery for `link[rel="stylesheet"]` and `script[src]`
 
 ---
 

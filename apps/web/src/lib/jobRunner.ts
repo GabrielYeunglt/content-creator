@@ -1,6 +1,6 @@
 import { updateJob, updateJobStatus } from './jobStorage';
-import { extractFieldFromHtml, extractNextUrlFromHtml } from './selectorEval';
-import type { JobRecord } from '../types/job';
+import { extractFieldFromHtml, extractLinkedAssetsFromHtml, extractNextUrlFromHtml } from './selectorEval';
+import type { ExtractedPageRecord, JobRecord } from '../types/job';
 import type { WebsiteProfile } from '../types/profile';
 
 type RunnerOptions = {
@@ -71,7 +71,7 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
 
   const visited = new Set<string>();
   const previews: string[] = [];
-  const extractedPages: Array<{ url: string; preview: string }> = [];
+  const extractedPages: ExtractedPageRecord[] = [];
   const maxPages = Math.max(1, profile.stopRules.maxPages);
   let currentUrl: string | null = startUrl;
   let pagesProcessed = 0;
@@ -151,8 +151,14 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
       }
 
       const pagePreview = cleanPreview(contentResult.value);
+      const linkedAssets = extractLinkedAssetsFromHtml({ html, baseUrl: currentUrl });
       previews.push(`Page ${pagesProcessed + 1}: ${pagePreview}`);
-      extractedPages.push({ url: currentUrl, preview: pagePreview });
+      extractedPages.push({
+        url: currentUrl,
+        preview: pagePreview,
+        stylesheets: linkedAssets.stylesheets,
+        scripts: linkedAssets.scripts
+      });
       pagesProcessed += 1;
 
       const nextResult = extractNextUrlFromHtml({
@@ -162,7 +168,7 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
         attributeName: profile.paginationRule.attributeName
       });
 
-      const resolvedNext = nextResult.ok ? resolveNextUrl(currentUrl, nextResult.value) : null;
+      const resolvedNext: string | null = nextResult.ok ? resolveNextUrl(currentUrl, nextResult.value) : null;
 
       const progress = updateJob(jobId, {
         pagesProcessed,
@@ -170,7 +176,7 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
         extractedPreview: previews.join('\n\n'),
         extractedPages,
         nextUrl: resolvedNext ?? '',
-        note: `Processed ${pagesProcessed} page(s)...`
+        note: `Processed ${pagesProcessed} page(s) (assets: ${linkedAssets.stylesheets.length} CSS, ${linkedAssets.scripts.length} JS on latest page)...`
       });
       onJobsUpdated(progress);
 
@@ -201,7 +207,7 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
         status: 'failed',
         completedAt: new Date().toISOString(),
         pagesProcessed,
-        lastVisitedUrl: currentUrl,
+        lastVisitedUrl: currentUrl ?? undefined,
         stopReason: looksLikeCorsFailure ? 'browser-fetch-blocked' : 'network-or-parse-error',
         error: message,
         extractedPages,
