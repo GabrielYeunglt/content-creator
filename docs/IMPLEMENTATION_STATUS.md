@@ -75,11 +75,13 @@ Build a profile-driven desktop/web app that crawls website content from a start 
 ### Results diagnostics
 - Results show status, stop reason, errors, pages processed, last visited URL
 - Per-page extracted records are stored and displayed (`url`, `preview`)
+- Per-page linked asset discovery for `link[rel="stylesheet"]` and `script[src]`
+- Virtual-browser crawler module (`crawler-engine`) added to capture rendered content and JS/CSS via Playwright in backend runtime
 
 ---
 
 ## ⚠️ Known Limitation
-- Current fetch/extract runs in browser context, so some sites fail due to CORS.
+- Web app path still fetches in browser context (CORS-limited); use `crawler-engine` virtual-browser path in backend/desktop runtime for complete rendered crawl coverage.
 - Next hardening step should move fetch/extract to desktop/backend runtime (Tauri/Rust or Node sidecar) to remove this limitation.
 
 ---
