@@ -1,12 +1,15 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { runCrawlJob } from '../lib/jobRunner';
 import { appendJob } from '../lib/jobStorage';
 import type { JobRecord } from '../types/job';
 import type { WebsiteProfile } from '../types/profile';
 
+const CREATE_PROFILE_OPTION_VALUE = '__create_profile__';
+
 type StartJobPanelProps = {
   profiles: WebsiteProfile[];
   onJobCreated: (jobs: JobRecord[]) => void;
+  onRequestCreateProfile: () => void;
 };
 
 function hostFromUrl(url: string): string | null {
@@ -17,11 +20,41 @@ function hostFromUrl(url: string): string | null {
   }
 }
 
-export function StartJobPanel({ profiles, onJobCreated }: StartJobPanelProps) {
+export function StartJobPanel({ profiles, onJobCreated, onRequestCreateProfile }: StartJobPanelProps) {
   const [startUrl, setStartUrl] = useState('');
   const [selectedProfileId, setSelectedProfileId] = useState('');
   const [message, setMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const targetHost = useMemo(() => hostFromUrl(startUrl.trim()), [startUrl]);
+
+  const matchingProfiles = useMemo(() => {
+    if (!targetHost) {
+      return profiles;
+    }
+
+    return profiles.filter((profile) => profile.domain === targetHost);
+  }, [profiles, targetHost]);
+
+  useEffect(() => {
+    if (!targetHost) {
+      return;
+    }
+
+    if (matchingProfiles.length === 0) {
+      setSelectedProfileId(CREATE_PROFILE_OPTION_VALUE);
+      return;
+    }
+
+    setSelectedProfileId((current) => {
+      const stillValid = matchingProfiles.some((profile) => profile.id === current);
+      if (stillValid) {
+        return current;
+      }
+
+      return matchingProfiles[0].id;
+    });
+  }, [targetHost, matchingProfiles]);
 
   const selectedProfile = useMemo(
     () => profiles.find((profile) => profile.id === selectedProfileId),
@@ -79,6 +112,17 @@ export function StartJobPanel({ profiles, onJobCreated }: StartJobPanelProps) {
     }
   }
 
+  function handleProfileSelectionChange(value: string) {
+    if (value === CREATE_PROFILE_OPTION_VALUE) {
+      onRequestCreateProfile();
+      return;
+    }
+
+    setSelectedProfileId(value);
+  }
+
+  const shouldShowCreateOption = Boolean(targetHost) && matchingProfiles.length === 0;
+
   return (
     <section>
       <h2>Start Job</h2>
@@ -90,15 +134,18 @@ export function StartJobPanel({ profiles, onJobCreated }: StartJobPanelProps) {
           Website Profile
           <select
             value={selectedProfileId}
-            onChange={(event) => setSelectedProfileId(event.target.value)}
+            onChange={(event) => handleProfileSelectionChange(event.target.value)}
             style={{ width: '100%' }}
           >
-            <option value="">Select profile...</option>
-            {profiles.map((profile) => (
+            {!shouldShowCreateOption && <option value="">Select profile...</option>}
+            {matchingProfiles.map((profile) => (
               <option key={profile.id} value={profile.id}>
                 {profile.name} ({profile.domain})
               </option>
             ))}
+            {shouldShowCreateOption && (
+              <option value={CREATE_PROFILE_OPTION_VALUE}>Create new profile for this domain...</option>
+            )}
           </select>
         </label>
 
@@ -113,13 +160,18 @@ export function StartJobPanel({ profiles, onJobCreated }: StartJobPanelProps) {
           />
         </label>
 
-        <button type="submit" disabled={isSubmitting || profiles.length === 0}>
+        <button type="submit" disabled={isSubmitting || profiles.length === 0 || shouldShowCreateOption}>
           {isSubmitting ? 'Running...' : 'Start Crawl Job'}
         </button>
       </form>
 
       {profiles.length === 0 && (
         <p style={{ color: '#8a4f00' }}>No profiles available. Create one in Profile Manager first.</p>
+      )}
+      {shouldShowCreateOption && (
+        <p style={{ color: '#8a4f00' }}>
+          No profile matches <code>{targetHost}</code>. Choose "Create new profile for this domain...".
+        </p>
       )}
       {message && <p>{message}</p>}
     </section>

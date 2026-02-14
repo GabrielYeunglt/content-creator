@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ProfileEditorForm } from './ProfileEditorForm';
 import { ProfileList } from './ProfileList';
 import {
@@ -12,6 +12,7 @@ import { defaultProfileDraft, type ProfileDraft, type WebsiteProfile } from '../
 
 type ProfileManagerPanelProps = {
   onProfilesChanged: (profiles: WebsiteProfile[]) => void;
+  createProfileRequestNonce: number;
 };
 
 type ProfileManagerView =
@@ -19,12 +20,22 @@ type ProfileManagerView =
   | { mode: 'create' }
   | { mode: 'edit'; profileId: string };
 
-export function ProfileManagerPanel({ onProfilesChanged }: ProfileManagerPanelProps) {
+export function ProfileManagerPanel({ onProfilesChanged, createProfileRequestNonce }: ProfileManagerPanelProps) {
   const initialProfiles = useMemo(() => readProfiles(), []);
   const [profiles, setProfiles] = useState(initialProfiles);
   const [draft, setDraft] = useState<ProfileDraft>(defaultProfileDraft);
   const [view, setView] = useState<ProfileManagerView>({ mode: 'list' });
   const [message, setMessage] = useState('');
+
+  useEffect(() => {
+    if (createProfileRequestNonce === 0) {
+      return;
+    }
+
+    setDraft(defaultProfileDraft);
+    setView({ mode: 'create' });
+    setMessage('Create a new profile for the selected domain.');
+  }, [createProfileRequestNonce]);
 
   function updateDraft<K extends keyof ProfileDraft>(key: K, value: ProfileDraft[K]) {
     setDraft((current) => ({ ...current, [key]: value }));
