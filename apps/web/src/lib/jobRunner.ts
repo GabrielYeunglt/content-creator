@@ -1,3 +1,4 @@
+import { crawlWithVirtualBrowser } from '../../../../packages/crawler-engine/src';
 import { updateJob, updateJobStatus } from './jobStorage';
 import type { ExtractedPageRecord, JobRecord } from '../types/job';
 import type { WebsiteProfile } from '../types/profile';
