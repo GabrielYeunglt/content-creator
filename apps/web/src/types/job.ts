@@ -8,6 +8,8 @@ export type StartJobInput = {
 export type ExtractedPageRecord = {
   url: string;
   preview: string;
+  stylesheets?: string[];
+  scripts?: string[];
 };
 
 export type JobRecord = {

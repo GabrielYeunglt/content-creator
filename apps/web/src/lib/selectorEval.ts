@@ -86,3 +86,47 @@ export function extractNextUrlFromHtml(params: {
     return { ok: false, error: 'Pagination selector evaluation failed.' };
   }
 }
+
+export function extractLinkedAssetsFromHtml(params: {
+  html: string;
+  baseUrl: string;
+}): { stylesheets: string[]; scripts: string[] } {
+  const { html, baseUrl } = params;
+
+  try {
+    const document = new DOMParser().parseFromString(html, 'text/html');
+
+    const stylesheets = Array.from(document.querySelectorAll('link[rel="stylesheet"][href]'))
+      .map((node) => node.getAttribute('href') ?? '')
+      .map((href) => href.trim())
+      .filter(Boolean)
+      .map((href) => {
+        try {
+          return new URL(href, baseUrl).toString();
+        } catch {
+          return null;
+        }
+      })
+      .filter((value): value is string => Boolean(value));
+
+    const scripts = Array.from(document.querySelectorAll('script[src]'))
+      .map((node) => node.getAttribute('src') ?? '')
+      .map((src) => src.trim())
+      .filter(Boolean)
+      .map((src) => {
+        try {
+          return new URL(src, baseUrl).toString();
+        } catch {
+          return null;
+        }
+      })
+      .filter((value): value is string => Boolean(value));
+
+    return {
+      stylesheets: Array.from(new Set(stylesheets)),
+      scripts: Array.from(new Set(scripts))
+    };
+  } catch {
+    return { stylesheets: [], scripts: [] };
+  }
+}

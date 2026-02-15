@@ -1,6 +1,5 @@
 import { updateJob, updateJobStatus } from './jobStorage';
-import { extractFieldFromHtml, extractNextUrlFromHtml } from './selectorEval';
-import type { JobRecord } from '../types/job';
+import type { ExtractedPageRecord, JobRecord } from '../types/job';
 import type { WebsiteProfile } from '../types/profile';
 
 type RunnerOptions = {
@@ -9,45 +8,59 @@ type RunnerOptions = {
   startUrl: string;
 };
 
-async function fetchHtml(url: string, timeoutMs: number): Promise<string> {
-  const controller = new AbortController();
-  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+type VirtualBrowserCrawlRequest = {
+  startUrl: string;
+  domain: string;
+  contentRule: {
+    selectorType: 'css' | 'xpath';
+    selector: string;
+    extractMode: 'text' | 'html' | 'attribute';
+    attributeName?: string;
+  };
+  paginationRule: {
+    selectorType: 'css' | 'xpath';
+    selector: string;
+    attributeName: string;
+  };
+  stopRules: {
+    maxPages: number;
+    maxConsecutiveErrors: number;
+  };
+  contentReadySelector?: {
+    selectorType: 'css' | 'xpath';
+    selector: string;
+    timeoutMs?: number;
+  };
+};
 
-  try {
-    const response = await fetch(url, { signal: controller.signal });
-    if (!response.ok) {
-      throw new Error(`Request failed with status ${response.status}`);
-    }
-
-    return await response.text();
-  } finally {
-    window.clearTimeout(timeoutId);
-  }
-}
+type VirtualBrowserCrawlResponse = {
+  pagesProcessed: number;
+  stopReason: string;
+  pages: Array<{
+    url: string;
+    content: string;
+    stylesheets: string[];
+    scripts: string[];
+  }>;
+};
 
 function cleanPreview(value: string): string {
   const normalized = value.replace(/\s+/g, ' ').trim();
   return normalized.length > 280 ? `${normalized.slice(0, 280)}…` : normalized;
 }
 
-function normalizedHost(url: string): string | null {
-  try {
-    return new URL(url).hostname.replace(/^www\./, '').toLowerCase();
-  } catch {
-    return null;
-  }
+function normalizeDomain(domain: string): string {
+  return domain.trim().replace(/^www\./, '').toLowerCase();
 }
 
-function resolveNextUrl(currentUrl: string, nextValue: string): string | null {
-  if (!nextValue.trim()) {
-    return null;
-  }
+function getDesktopCrawlerBridge():
+  | ((request: VirtualBrowserCrawlRequest) => Promise<VirtualBrowserCrawlResponse>)
+  | null {
+  const bridge = (window as Window & {
+    __CONTENT_CREATOR_DESKTOP_CRAWLER__?: (request: VirtualBrowserCrawlRequest) => Promise<VirtualBrowserCrawlResponse>;
+  }).__CONTENT_CREATOR_DESKTOP_CRAWLER__;
 
-  try {
-    return new URL(nextValue, currentUrl).toString();
-  } catch {
-    return null;
-  }
+  return typeof bridge === 'function' ? bridge : null;
 }
 
 export async function runCrawlJob(jobId: string, options: RunnerOptions): Promise<void> {
@@ -66,151 +79,77 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
     return;
   }
 
-  const running = updateJobStatus(jobId, 'running', 'Running crawl loop...');
+  const running = updateJobStatus(jobId, 'running', 'Running virtual-browser crawl...');
   onJobsUpdated(running);
 
-  const visited = new Set<string>();
-  const previews: string[] = [];
-  const extractedPages: Array<{ url: string; preview: string }> = [];
-  const maxPages = Math.max(1, profile.stopRules.maxPages);
-  let currentUrl: string | null = startUrl;
-  let pagesProcessed = 0;
+  const bridge = getDesktopCrawlerBridge();
+  if (!bridge) {
+    const failed = updateJob(jobId, {
+      status: 'failed',
+      completedAt: new Date().toISOString(),
+      stopReason: 'desktop-crawler-bridge-missing',
+      note:
+        'Virtual-browser crawl requires desktop/backend bridge wiring. Running `apps/web` standalone cannot execute Playwright.'
+    });
+    onJobsUpdated(failed);
+    return;
+  }
 
-  while (currentUrl) {
-    if (visited.has(currentUrl)) {
-      const completed = updateJob(jobId, {
-        status: 'completed',
-        completedAt: new Date().toISOString(),
-        pagesProcessed,
-        lastVisitedUrl: currentUrl,
-        extractedPreview: previews.join('\n\n'),
-        extractedPages,
-        stopReason: 'already-visited-url',
-        note: 'Stopped to avoid URL loop.'
-      });
-      onJobsUpdated(completed);
-      return;
-    }
-
-    if (pagesProcessed >= maxPages) {
-      const completed = updateJob(jobId, {
-        status: 'completed',
-        completedAt: new Date().toISOString(),
-        pagesProcessed,
-        lastVisitedUrl: currentUrl,
-        extractedPreview: previews.join('\n\n'),
-        extractedPages,
-        stopReason: 'max-pages-reached',
-        note: `Stopped at max pages (${maxPages}).`
-      });
-      onJobsUpdated(completed);
-      return;
-    }
-
-    const currentHost = normalizedHost(currentUrl);
-    if (!currentHost || currentHost !== profile.domain) {
-      const completed = updateJob(jobId, {
-        status: 'completed',
-        completedAt: new Date().toISOString(),
-        pagesProcessed,
-        lastVisitedUrl: currentUrl,
-        extractedPreview: previews.join('\n\n'),
-        extractedPages,
-        stopReason: 'out-of-domain-blocked',
-        note: `Stopped due to strict domain policy (${profile.domain}).`
-      });
-      onJobsUpdated(completed);
-      return;
-    }
-
-    try {
-      const html = await fetchHtml(currentUrl, 15000);
-      visited.add(currentUrl);
-
-      const contentResult = extractFieldFromHtml({
-        html,
+  try {
+    const result = await bridge({
+      startUrl,
+      domain: normalizeDomain(profile.domain),
+      contentRule: {
         selectorType: primaryRule.selectorType,
         selector: primaryRule.selector,
         extractMode: primaryRule.extractMode,
         attributeName: primaryRule.attributeName
-      });
-
-      if (!contentResult.ok) {
-        const failed = updateJob(jobId, {
-          status: 'failed',
-          completedAt: new Date().toISOString(),
-          pagesProcessed,
-          lastVisitedUrl: currentUrl,
-          stopReason: 'content-selector-no-match',
-          error: contentResult.error,
-          note: 'Content extraction failed.',
-          extractedPages
-        });
-        onJobsUpdated(failed);
-        return;
-      }
-
-      const pagePreview = cleanPreview(contentResult.value);
-      previews.push(`Page ${pagesProcessed + 1}: ${pagePreview}`);
-      extractedPages.push({ url: currentUrl, preview: pagePreview });
-      pagesProcessed += 1;
-
-      const nextResult = extractNextUrlFromHtml({
-        html,
+      },
+      paginationRule: {
         selectorType: profile.paginationRule.selectorType,
         selector: profile.paginationRule.selector,
         attributeName: profile.paginationRule.attributeName
-      });
-
-      const resolvedNext = nextResult.ok ? resolveNextUrl(currentUrl, nextResult.value) : null;
-
-      const progress = updateJob(jobId, {
-        pagesProcessed,
-        lastVisitedUrl: currentUrl,
-        extractedPreview: previews.join('\n\n'),
-        extractedPages,
-        nextUrl: resolvedNext ?? '',
-        note: `Processed ${pagesProcessed} page(s)...`
-      });
-      onJobsUpdated(progress);
-
-      if (!resolvedNext) {
-        const completed = updateJob(jobId, {
-          status: 'completed',
-          completedAt: new Date().toISOString(),
-          pagesProcessed,
-          lastVisitedUrl: currentUrl,
-          extractedPreview: previews.join('\n\n'),
-          extractedPages,
-          stopReason: 'no-next-button',
-          note: 'Crawl completed: no next page found.'
-        });
-        onJobsUpdated(completed);
-        return;
+      },
+      stopRules: {
+        maxPages: Math.max(1, profile.stopRules.maxPages),
+        maxConsecutiveErrors: 3
+      },
+      contentReadySelector: {
+        selectorType: primaryRule.selectorType,
+        selector: primaryRule.selector,
+        timeoutMs: 15000
       }
+    });
 
-      currentUrl = resolvedNext;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      const looksLikeCorsFailure =
-        message.toLowerCase().includes('failed to fetch') ||
-        message.toLowerCase().includes('networkerror') ||
-        message.toLowerCase().includes('load failed');
+    const extractedPages: ExtractedPageRecord[] = result.pages.map((item) => ({
+      url: item.url,
+      preview: cleanPreview(item.content),
+      stylesheets: item.stylesheets,
+      scripts: item.scripts
+    }));
 
-      const failed = updateJob(jobId, {
-        status: 'failed',
-        completedAt: new Date().toISOString(),
-        pagesProcessed,
-        lastVisitedUrl: currentUrl,
-        stopReason: looksLikeCorsFailure ? 'browser-fetch-blocked' : 'network-or-parse-error',
-        error: message,
-        extractedPages,
-        note: looksLikeCorsFailure
-          ? 'Browser fetch was blocked (likely CORS). In desktop mode, move fetch/extract to backend runtime.'
-          : 'Failed to fetch or process page.'
-      });
-      onJobsUpdated(failed);
-      return;
-    }
+    const completed = updateJob(jobId, {
+      status: 'completed',
+      completedAt: new Date().toISOString(),
+      pagesProcessed: result.pagesProcessed,
+      lastVisitedUrl: result.pages[result.pages.length - 1]?.url,
+      extractedPages,
+      extractedPreview: extractedPages.map((item, index) => `Page ${index + 1}: ${item.preview}`).join('\n\n'),
+      stopReason: result.stopReason,
+      note: `Virtual-browser crawl completed with stop reason: ${result.stopReason}.`
+    });
+
+    onJobsUpdated(completed);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    const failed = updateJob(jobId, {
+      status: 'failed',
+      completedAt: new Date().toISOString(),
+      stopReason: 'virtual-browser-crawl-error',
+      error: message,
+      note: 'Desktop/backend virtual-browser crawl failed. Check bridge runtime logs.'
+    });
+
+    onJobsUpdated(failed);
   }
 }
