@@ -9,6 +9,42 @@ type RunnerOptions = {
   startUrl: string;
 };
 
+type VirtualBrowserCrawlRequest = {
+  startUrl: string;
+  domain: string;
+  contentRule: {
+    selectorType: 'css' | 'xpath';
+    selector: string;
+    extractMode: 'text' | 'html' | 'attribute';
+    attributeName?: string;
+  };
+  paginationRule: {
+    selectorType: 'css' | 'xpath';
+    selector: string;
+    attributeName: string;
+  };
+  stopRules: {
+    maxPages: number;
+    maxConsecutiveErrors: number;
+  };
+  contentReadySelector?: {
+    selectorType: 'css' | 'xpath';
+    selector: string;
+    timeoutMs?: number;
+  };
+};
+
+type VirtualBrowserCrawlResponse = {
+  pagesProcessed: number;
+  stopReason: string;
+  pages: Array<{
+    url: string;
+    content: string;
+    stylesheets: string[];
+    scripts: string[];
+  }>;
+};
+
 function cleanPreview(value: string): string {
   const normalized = value.replace(/\s+/g, ' ').trim();
   return normalized.length > 280 ? `${normalized.slice(0, 280)}…` : normalized;
@@ -16,6 +52,16 @@ function cleanPreview(value: string): string {
 
 function normalizeDomain(domain: string): string {
   return domain.trim().replace(/^www\./, '').toLowerCase();
+}
+
+function getDesktopCrawlerBridge():
+  | ((request: VirtualBrowserCrawlRequest) => Promise<VirtualBrowserCrawlResponse>)
+  | null {
+  const bridge = (window as Window & {
+    __CONTENT_CREATOR_DESKTOP_CRAWLER__?: (request: VirtualBrowserCrawlRequest) => Promise<VirtualBrowserCrawlResponse>;
+  }).__CONTENT_CREATOR_DESKTOP_CRAWLER__;
+
+  return typeof bridge === 'function' ? bridge : null;
 }
 
 export async function runCrawlJob(jobId: string, options: RunnerOptions): Promise<void> {
@@ -37,8 +83,21 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
   const running = updateJobStatus(jobId, 'running', 'Running virtual-browser crawl...');
   onJobsUpdated(running);
 
+  const bridge = getDesktopCrawlerBridge();
+  if (!bridge) {
+    const failed = updateJob(jobId, {
+      status: 'failed',
+      completedAt: new Date().toISOString(),
+      stopReason: 'desktop-crawler-bridge-missing',
+      note:
+        'Virtual-browser crawl requires desktop/backend bridge wiring. Running `apps/web` standalone cannot execute Playwright.'
+    });
+    onJobsUpdated(failed);
+    return;
+  }
+
   try {
-    const result = await crawlWithVirtualBrowser({
+    const result = await bridge({
       startUrl,
       domain: normalizeDomain(profile.domain),
       contentRule: {
@@ -87,10 +146,9 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
     const failed = updateJob(jobId, {
       status: 'failed',
       completedAt: new Date().toISOString(),
-      stopReason: 'virtual-browser-unavailable',
+      stopReason: 'virtual-browser-crawl-error',
       error: message,
-      note:
-        'Virtual-browser crawl is not available in the web-only runtime. Run this via desktop/backend runtime with Playwright installed.'
+      note: 'Desktop/backend virtual-browser crawl failed. Check bridge runtime logs.'
     });
 
     onJobsUpdated(failed);

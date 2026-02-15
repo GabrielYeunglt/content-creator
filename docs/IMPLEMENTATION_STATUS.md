@@ -81,7 +81,7 @@ Build a profile-driven desktop/web app that crawls website content from a start 
 ---
 
 ## ⚠️ Known Limitation
-- Start-job runner now invokes `crawlWithVirtualBrowser`; in pure web-only runtime this fails fast with guidance, and it is intended to run via backend/desktop runtime for complete rendered crawl coverage.
+- Start-job runner calls a desktop/backend crawler bridge for virtual-browser crawling; `apps/web` standalone fails fast with guidance because it cannot run Playwright directly in the browser bundle.
 - Next hardening step should move fetch/extract to desktop/backend runtime (Tauri/Rust or Node sidecar) to remove this limitation.
 
 ---
