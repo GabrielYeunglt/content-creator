@@ -1,8 +1,9 @@
-import { exportJobAsEpubManifest, exportJobAsHtml } from '../lib/exportActions';
+import { exportJobAllViaDesktop, exportJobAsEpubManifest, exportJobAsHtml } from '../lib/exportActions';
 import type { JobRecord, JobStatus } from '../types/job';
 
 type ResultsPanelProps = {
   jobs: JobRecord[];
+  onJobsUpdated: (jobs: JobRecord[]) => void;
 };
 
 function statusColor(status: JobStatus): string {
@@ -18,7 +19,28 @@ function statusColor(status: JobStatus): string {
   return '#b00020';
 }
 
-export function ResultsPanel({ jobs }: ResultsPanelProps) {
+export function ResultsPanel({ jobs, onJobsUpdated }: ResultsPanelProps) {
+  async function handleExportHtml(job: JobRecord) {
+    const updated = await exportJobAsHtml(job);
+    if (updated) {
+      onJobsUpdated(updated);
+    }
+  }
+
+  async function handleExportManifest(job: JobRecord) {
+    const updated = await exportJobAsEpubManifest(job);
+    if (updated) {
+      onJobsUpdated(updated);
+    }
+  }
+
+  async function handleExportAll(job: JobRecord) {
+    const updated = await exportJobAllViaDesktop(job);
+    if (updated) {
+      onJobsUpdated(updated);
+    }
+  }
+
   return (
     <section>
       <h2>Results</h2>
@@ -40,7 +62,6 @@ export function ResultsPanel({ jobs }: ResultsPanelProps) {
           <p>Created: {new Date(job.createdAt).toLocaleString()}</p>
           {job.completedAt && <p>Completed: {new Date(job.completedAt).toLocaleString()}</p>}
           {job.note && <p>Note: {job.note}</p>}
-
 
           {typeof job.pagesProcessed === 'number' && <p>Pages processed: {job.pagesProcessed}</p>}
           {job.lastVisitedUrl && (
@@ -68,14 +89,30 @@ export function ResultsPanel({ jobs }: ResultsPanelProps) {
           )}
 
           {job.extractedPages && job.extractedPages.length > 0 && (
-            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
-              <button type="button" onClick={() => exportJobAsHtml(job)}>
+            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
+              <button type="button" onClick={() => void handleExportHtml(job)}>
                 Export HTML snapshot
               </button>
-              <button type="button" onClick={() => exportJobAsEpubManifest(job)}>
+              <button type="button" onClick={() => void handleExportManifest(job)}>
                 Export EPUB manifest
               </button>
+              <button type="button" onClick={() => void handleExportAll(job)}>
+                Export all (desktop bridge)
+              </button>
             </div>
+          )}
+
+          {job.exportedArtifacts && job.exportedArtifacts.length > 0 && (
+            <details>
+              <summary>Exported artifacts ({job.exportedArtifacts.length})</summary>
+              <ul>
+                {job.exportedArtifacts.map((artifact, index) => (
+                  <li key={`${job.id}-artifact-${index}`}>
+                    <code>{artifact.format}</code> → <code>{artifact.path}</code>
+                  </li>
+                ))}
+              </ul>
+            </details>
           )}
 
           {job.extractedPages && job.extractedPages.length > 0 && (

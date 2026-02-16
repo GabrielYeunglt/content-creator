@@ -1,12 +1,17 @@
 export type JobStatus = 'queued' | 'running' | 'completed' | 'failed';
 
-
 export type ConsolidatedDocumentRecord = {
   id: string;
   title: string;
   sourceDomain: string;
   generatedAt: string;
   chapterCount: number;
+};
+
+export type ExportedArtifactRecord = {
+  format: 'html' | 'pdf' | 'epub' | 'epub-manifest';
+  path: string;
+  createdAt: string;
 };
 
 export type StartJobInput = {
@@ -39,4 +44,5 @@ export type JobRecord = {
   pagesProcessed?: number;
   lastVisitedUrl?: string;
   consolidatedDocument?: ConsolidatedDocumentRecord;
+  exportedArtifacts?: ExportedArtifactRecord[];
 };

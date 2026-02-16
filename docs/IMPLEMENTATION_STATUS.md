@@ -79,6 +79,7 @@ Build a profile-driven desktop/web app that crawls website content from a start 
 - Virtual-browser crawler module (`crawler-engine`) added to capture rendered content and JS/CSS via Playwright in backend runtime, including optional content-ready waits and click interaction steps
 - Consolidation layer now builds a canonical document summary (chapter count + metadata) from extracted pages for each completed crawl job
 - Export MVP advanced: export-engine now includes runtime pipelines for HTML, PDF (Playwright), EPUB (epub-gen), and manifest artifacts
+- Results UI now tracks persisted exported artifact records when desktop/backend export bridge is available
 - Crawler-engine hardening started: configurable retry/backoff per page with structured error records in crawl results
 
 ---
@@ -94,7 +95,7 @@ Build a profile-driven desktop/web app that crawls website content from a start 
 1. **Consolidation layer**
    - Build canonical chapter/page model from `extractedPages`.
 2. **Export MVP**
-   - Wire export-engine runtime pipeline into desktop/backend bridge and artifact persistence UI.
+   - Finalize desktop/backend bridge wiring for one-click PDF/EPUB exports in production runtime.
    - Finalize PDF/EPUB runtime dependency handling across environments.
 3. **Execution runtime upgrade**
    - Move crawler fetch/extract from browser to backend runtime to avoid CORS issues.

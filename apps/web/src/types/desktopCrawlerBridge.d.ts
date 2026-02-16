@@ -35,5 +35,23 @@ declare global {
         scripts: string[];
       }>;
     }>;
+
+    __CONTENT_CREATOR_DESKTOP_EXPORT__?: (request: {
+      jobId: string;
+      format: 'html' | 'pdf' | 'epub' | 'epub-manifest' | 'all';
+      pages: Array<{
+        url: string;
+        preview: string;
+        stylesheets?: string[];
+        scripts?: string[];
+      }>;
+      profileName: string;
+      profileDomain: string;
+    }) => Promise<{
+      artifacts: Array<{
+        format: 'html' | 'pdf' | 'epub' | 'epub-manifest';
+        path: string;
+      }>;
+    }>;
   }
 }

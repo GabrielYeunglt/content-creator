@@ -109,7 +109,7 @@ export async function runExportPipeline(options: ExportPipelineOptions): Promise
 
 async function writeTextFile(path: string, content: string): Promise<void> {
   const fsModuleName = 'node:fs/promises';
-  const fs = (await import(fsModuleName)) as { writeFile: (path: string, content: string, encoding: string) => Promise<void> };
+  const fs = (await import(/* @vite-ignore */ fsModuleName)) as { writeFile: (path: string, content: string, encoding: string) => Promise<void> };
   await fs.writeFile(path, content, 'utf-8');
 }
 
@@ -121,7 +121,7 @@ async function renderPdfFromCanonicalDocument(params: {
 
   const html = renderCanonicalHtml(document);
   const playwrightModuleName = 'playwright';
-  const playwrightModule = (await import(playwrightModuleName)) as { chromium: { launch: (opts: { headless: boolean }) => Promise<any> } };
+  const playwrightModule = (await import(/* @vite-ignore */ playwrightModuleName)) as { chromium: { launch: (opts: { headless: boolean }) => Promise<any> } };
 
   const browser = await playwrightModule.chromium.launch({ headless: true });
   try {
@@ -150,7 +150,7 @@ async function renderEpubFromCanonicalDocument(params: {
   const { document, outputEpubPath } = params;
 
   const epubModuleName = 'epub-gen';
-  const EpubConstructor = (await import(epubModuleName)).default as new (
+  const EpubConstructor = (await import(/* @vite-ignore */ epubModuleName)).default as new (
     options: {
       title: string;
       author: string;
