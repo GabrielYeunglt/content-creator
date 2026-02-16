@@ -66,7 +66,7 @@ export function App() {
         />
       )}
       {activeSection === 'settings' && <SettingsPanel />}
-      {activeSection === 'results' && <ResultsPanel jobs={jobs} />}
+      {activeSection === 'results' && <ResultsPanel jobs={jobs} onJobsUpdated={setJobs} />}
     </main>
   );
 }
