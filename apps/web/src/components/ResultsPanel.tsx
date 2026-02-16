@@ -1,3 +1,4 @@
+import { exportJobAsEpubManifest, exportJobAsHtml } from '../lib/exportActions';
 import type { JobRecord, JobStatus } from '../types/job';
 
 type ResultsPanelProps = {
@@ -64,6 +65,17 @@ export function ResultsPanel({ jobs }: ResultsPanelProps) {
             <p>
               Next URL: <code>{job.nextUrl}</code>
             </p>
+          )}
+
+          {job.extractedPages && job.extractedPages.length > 0 && (
+            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+              <button type="button" onClick={() => exportJobAsHtml(job)}>
+                Export HTML snapshot
+              </button>
+              <button type="button" onClick={() => exportJobAsEpubManifest(job)}>
+                Export EPUB manifest
+              </button>
+            </div>
           )}
 
           {job.extractedPages && job.extractedPages.length > 0 && (
