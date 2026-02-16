@@ -48,6 +48,12 @@ export function ResultsPanel({ jobs }: ResultsPanelProps) {
             </p>
           )}
           {job.stopReason && <p>Stop reason: {job.stopReason}</p>}
+          {job.consolidatedDocument && (
+            <p>
+              Consolidated document: <strong>{job.consolidatedDocument.title}</strong> (
+              {job.consolidatedDocument.chapterCount} chapter(s))
+            </p>
+          )}
           {job.error && <p style={{ color: '#b00020' }}>Error: {job.error}</p>}
           {job.extractedPreview && (
             <p>

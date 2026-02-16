@@ -1,4 +1,4 @@
-import { crawlWithVirtualBrowser } from '../../../../packages/crawler-engine/src';
+import { buildCanonicalDocument } from '../../../../packages/core/src';
 import { updateJob, updateJobStatus } from './jobStorage';
 import type { ExtractedPageRecord, JobRecord } from '../types/job';
 import type { WebsiteProfile } from '../types/profile';
@@ -129,6 +129,13 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
       scripts: item.scripts
     }));
 
+    const consolidated = buildCanonicalDocument({
+      jobId,
+      profileName: profile.name,
+      profileDomain: profile.domain,
+      pages: extractedPages
+    });
+
     const completed = updateJob(jobId, {
       status: 'completed',
       completedAt: new Date().toISOString(),
@@ -136,6 +143,13 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
       lastVisitedUrl: result.pages[result.pages.length - 1]?.url,
       extractedPages,
       extractedPreview: extractedPages.map((item, index) => `Page ${index + 1}: ${item.preview}`).join('\n\n'),
+      consolidatedDocument: {
+        id: consolidated.id,
+        title: consolidated.title,
+        sourceDomain: consolidated.sourceDomain,
+        generatedAt: consolidated.generatedAt,
+        chapterCount: consolidated.chapters.length
+      },
       stopReason: result.stopReason,
       note: `Virtual-browser crawl completed with stop reason: ${result.stopReason}.`
     });
