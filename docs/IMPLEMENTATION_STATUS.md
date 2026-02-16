@@ -82,7 +82,7 @@ Build a profile-driven desktop/web app that crawls website content from a start 
 - Results UI now tracks persisted exported artifact records when desktop/backend export bridge is available
 - Start Job now surfaces runtime bridge readiness indicators (crawler/export) to make standalone-web limitations explicit before execution
 - Crawler-engine hardening started: configurable retry/backoff per page with structured error records in crawl results
-- Fixture-based integration smoke tests added for no-next and visited-loop scenarios via local fixture server
+- Fixture-based integration checks now cover no-next, visited-loop, shared asset serving, default route behavior, and invalid path handling
 
 ---
 

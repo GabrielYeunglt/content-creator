@@ -34,3 +34,9 @@ FIXTURE_HOST=0.0.0.0 FIXTURE_PORT=4174 npm run fixtures:serve
 ```bash
 npm run test:fixtures
 ```
+
+Coverage includes:
+- alpha no-next crawl path
+- beta visited-loop crawl path
+- shared JS/CSS asset serving
+- default route behavior and missing/traversal path handling

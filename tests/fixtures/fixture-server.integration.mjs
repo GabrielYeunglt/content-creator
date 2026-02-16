@@ -83,3 +83,28 @@ test('fixture server serves beta loop flow', async () => {
   const htmlB = await loopB.text();
   assert.match(htmlB, /href="\/site-beta\/loop-a.html"/);
 });
+
+test('fixture server serves shared assets and default route', async () => {
+  const css = await fetch(`${BASE_URL}/shared/assets/base.css`);
+  assert.equal(css.status, 200);
+  const cssText = await css.text();
+  assert.match(cssText, /font-family: Arial, sans-serif/);
+
+  const js = await fetch(`${BASE_URL}/shared/assets/app.js`);
+  assert.equal(js.status, 200);
+  const jsText = await js.text();
+  assert.match(jsText, /window.__fixtureLoaded = true/);
+
+  const root = await fetch(`${BASE_URL}/`);
+  assert.equal(root.status, 200);
+  const rootHtml = await root.text();
+  assert.match(rootHtml, /Alpha Chapter 1/);
+});
+
+test('fixture server rejects invalid traversal and missing file', async () => {
+  const traversal = await fetch(`${BASE_URL}/../../etc/passwd`);
+  assert.ok([400, 404].includes(traversal.status));
+
+  const missing = await fetch(`${BASE_URL}/site-alpha/does-not-exist.html`);
+  assert.equal(missing.status, 404);
+});
