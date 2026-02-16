@@ -18,6 +18,16 @@ Install Playwright in the runtime app that invokes this package:
 npm i playwright
 ```
 
+
+### Reliability options
+
+You can tune retry behavior per page:
+
+- `stopRules.maxRetriesPerPage` (default `1`)
+- `stopRules.retryBackoffMs` (default `750`)
+
+The crawl result also includes an `errors` array containing per-attempt failure details (`url`, `attempt`, `error`).
+
 ### Example
 
 ```ts
@@ -38,7 +48,9 @@ const result = await crawlWithVirtualBrowser({
   },
   stopRules: {
     maxPages: 50,
-    maxConsecutiveErrors: 3
+    maxConsecutiveErrors: 3,
+    maxRetriesPerPage: 2,
+    retryBackoffMs: 1000
   },
   // Optional: wait for hydrated content to exist.
   contentReadySelector: {

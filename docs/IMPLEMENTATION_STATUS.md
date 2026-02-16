@@ -79,6 +79,7 @@ Build a profile-driven desktop/web app that crawls website content from a start 
 - Virtual-browser crawler module (`crawler-engine`) added to capture rendered content and JS/CSS via Playwright in backend runtime, including optional content-ready waits and click interaction steps
 - Consolidation layer now builds a canonical document summary (chapter count + metadata) from extracted pages for each completed crawl job
 - Export MVP scaffold added: HTML snapshot export and EPUB-manifest export from canonical document model
+- Crawler-engine hardening started: configurable retry/backoff per page with structured error records in crawl results
 
 ---
 

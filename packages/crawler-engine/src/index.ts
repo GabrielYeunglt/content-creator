@@ -24,6 +24,8 @@ export type CrawlPaginationRule = {
 export type CrawlStopRules = {
   maxPages: number;
   maxConsecutiveErrors: number;
+  maxRetriesPerPage?: number;
+  retryBackoffMs?: number;
 };
 
 export type CrawlInteractionStep = {
@@ -55,10 +57,17 @@ export type CrawledPage = {
   scripts: string[];
 };
 
+export type CrawlErrorRecord = {
+  url: string;
+  attempt: number;
+  error: string;
+};
+
 export type CrawlResult = {
   pagesProcessed: number;
   stopReason: CrawlStopReason;
   pages: CrawledPage[];
+  errors: CrawlErrorRecord[];
 };
 
 type RequestLike = {
@@ -143,9 +152,13 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
 
   const visited = new Set<string>();
   const pages: CrawledPage[] = [];
+  const errors: CrawlErrorRecord[] = [];
 
   let currentUrl: string | null = startUrl;
   let consecutiveErrors = 0;
+
+  const maxRetriesPerPage = Math.max(0, stopRules.maxRetriesPerPage ?? 1);
+  const retryBackoffMs = Math.max(0, stopRules.retryBackoffMs ?? 750);
 
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext();
@@ -154,16 +167,16 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
   try {
     while (currentUrl) {
       if (visited.has(currentUrl)) {
-        return { pagesProcessed: pages.length, stopReason: 'already-visited-url', pages };
+        return { pagesProcessed: pages.length, stopReason: 'already-visited-url', pages, errors };
       }
 
       if (pages.length >= Math.max(1, stopRules.maxPages)) {
-        return { pagesProcessed: pages.length, stopReason: 'max-pages-reached', pages };
+        return { pagesProcessed: pages.length, stopReason: 'max-pages-reached', pages, errors };
       }
 
       const host = normalizedHost(currentUrl);
       if (!host || host !== domain.replace(/^www\./, '').toLowerCase()) {
-        return { pagesProcessed: pages.length, stopReason: 'out-of-domain-blocked', pages };
+        return { pagesProcessed: pages.length, stopReason: 'out-of-domain-blocked', pages, errors };
       }
 
       const networkStylesheets = new Set<string>();
@@ -177,24 +190,40 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
       page.on('requestfinished', requestHandler);
 
       try {
-        await page.goto(currentUrl, { waitUntil: 'networkidle', timeout: timeoutMs });
+        for (let attempt = 1; attempt <= maxRetriesPerPage + 1; attempt += 1) {
+          try {
+            await page.goto(currentUrl, { waitUntil: 'networkidle', timeout: timeoutMs });
 
-        for (const step of interactionSteps) {
-          if (step.type === 'click') {
-            const stepSelector = toCssSelector(step.selectorType, step.selector);
-            const stepTimeout = step.timeoutMs ?? 5000;
-            await page.waitForSelector(stepSelector, { timeout: stepTimeout });
-            await page.click(stepSelector, { timeout: stepTimeout });
-            await page.waitForTimeout(300);
+            for (const step of interactionSteps) {
+              if (step.type === 'click') {
+                const stepSelector = toCssSelector(step.selectorType, step.selector);
+                const stepTimeout = step.timeoutMs ?? 5000;
+                await page.waitForSelector(stepSelector, { timeout: stepTimeout });
+                await page.click(stepSelector, { timeout: stepTimeout });
+                await page.waitForTimeout(300);
+              }
+            }
+
+            if (contentReadySelector) {
+              const readySelector = toCssSelector(contentReadySelector.selectorType, contentReadySelector.selector);
+              await page.waitForSelector(readySelector, { timeout: contentReadySelector.timeoutMs ?? timeoutMs });
+            }
+
+            visited.add(currentUrl);
+            break;
+          } catch (error) {
+            const message = error instanceof Error ? error.message : 'Unknown crawl attempt error';
+            errors.push({ url: currentUrl, attempt, error: message });
+
+            if (attempt > maxRetriesPerPage) {
+              throw error;
+            }
+
+            if (retryBackoffMs > 0) {
+              await page.waitForTimeout(retryBackoffMs * attempt);
+            }
           }
         }
-
-        if (contentReadySelector) {
-          const readySelector = toCssSelector(contentReadySelector.selectorType, contentReadySelector.selector);
-          await page.waitForSelector(readySelector, { timeout: contentReadySelector.timeoutMs ?? timeoutMs });
-        }
-
-        visited.add(currentUrl);
 
         const content = await page.evaluate(
           ({ selectorType, selector, extractMode, attributeName }) => {
@@ -255,21 +284,24 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
         consecutiveErrors = 0;
         const resolvedNext = toAbsoluteUrl(currentUrl, nextValue);
         if (!resolvedNext) {
-          return { pagesProcessed: pages.length, stopReason: 'no-next-button', pages };
+          return { pagesProcessed: pages.length, stopReason: 'no-next-button', pages, errors };
         }
 
         currentUrl = resolvedNext;
-      } catch {
+      } catch (error) {
         consecutiveErrors += 1;
+        const message = error instanceof Error ? error.message : 'Unknown crawl processing error';
+        errors.push({ url: currentUrl, attempt: maxRetriesPerPage + 1, error: message });
+
         if (consecutiveErrors >= Math.max(1, stopRules.maxConsecutiveErrors)) {
-          return { pagesProcessed: pages.length, stopReason: 'error-threshold-reached', pages };
+          return { pagesProcessed: pages.length, stopReason: 'error-threshold-reached', pages, errors };
         }
       } finally {
         page.off('requestfinished', requestHandler);
       }
     }
 
-    return { pagesProcessed: pages.length, stopReason: 'no-next-button', pages };
+    return { pagesProcessed: pages.length, stopReason: 'no-next-button', pages, errors };
   } finally {
     await context.close();
     await browser.close();
