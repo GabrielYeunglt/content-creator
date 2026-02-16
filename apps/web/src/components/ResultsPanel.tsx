@@ -48,6 +48,12 @@ export function ResultsPanel({ jobs }: ResultsPanelProps) {
             </p>
           )}
           {job.stopReason && <p>Stop reason: {job.stopReason}</p>}
+          {job.consolidatedDocument && (
+            <p>
+              Consolidated document: <strong>{job.consolidatedDocument.title}</strong> (
+              {job.consolidatedDocument.chapterCount} chapter(s))
+            </p>
+          )}
           {job.error && <p style={{ color: '#b00020' }}>Error: {job.error}</p>}
           {job.extractedPreview && (
             <p>
@@ -68,6 +74,9 @@ export function ResultsPanel({ jobs }: ResultsPanelProps) {
                   <li key={`${job.id}-${index}`}>
                     <code>{page.url}</code>
                     <div>{page.preview}</div>
+                    <div style={{ fontSize: '0.9rem', color: '#444' }}>
+                      Assets: {page.stylesheets?.length ?? 0} stylesheet(s), {page.scripts?.length ?? 0} script(s)
+                    </div>
                   </li>
                 ))}
               </ul>
