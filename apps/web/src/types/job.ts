@@ -1,5 +1,14 @@
 export type JobStatus = 'queued' | 'running' | 'completed' | 'failed';
 
+
+export type ConsolidatedDocumentRecord = {
+  id: string;
+  title: string;
+  sourceDomain: string;
+  generatedAt: string;
+  chapterCount: number;
+};
+
 export type StartJobInput = {
   startUrl: string;
   profileId: string;
@@ -8,6 +17,8 @@ export type StartJobInput = {
 export type ExtractedPageRecord = {
   url: string;
   preview: string;
+  stylesheets?: string[];
+  scripts?: string[];
 };
 
 export type JobRecord = {
@@ -27,4 +38,5 @@ export type JobRecord = {
   error?: string;
   pagesProcessed?: number;
   lastVisitedUrl?: string;
+  consolidatedDocument?: ConsolidatedDocumentRecord;
 };
