@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { runCrawlJob } from '../lib/jobRunner';
 import { appendJob } from '../lib/jobStorage';
+import { readRuntimeBridgeStatus } from '../lib/runtimeBridgeStatus';
 import type { JobRecord } from '../types/job';
 import type { WebsiteProfile } from '../types/profile';
 
@@ -25,6 +26,8 @@ export function StartJobPanel({ profiles, onJobCreated, onRequestCreateProfile }
   const [selectedProfileId, setSelectedProfileId] = useState('');
   const [message, setMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const runtimeBridgeStatus = useMemo(() => readRuntimeBridgeStatus(), []);
 
   const targetHost = useMemo(() => hostFromUrl(startUrl.trim()), [startUrl]);
 
@@ -127,7 +130,17 @@ export function StartJobPanel({ profiles, onJobCreated, onRequestCreateProfile }
     <section>
       <h2>Start Job</h2>
       <p>Pick a profile, enter a starting URL, and validate strict in-domain matching.</p>
-      <p style={{ color: '#8a4f00' }}>Note: direct browser fetch may fail on some websites due to CORS until desktop/backend fetch is wired.</p>
+      <p style={{ color: runtimeBridgeStatus.crawlerBridgeReady ? '#1f7a1f' : '#8a4f00' }}>
+        Crawl runtime bridge: {runtimeBridgeStatus.crawlerBridgeReady ? 'connected' : 'not connected'}.
+      </p>
+      <p style={{ color: runtimeBridgeStatus.exportBridgeReady ? '#1f7a1f' : '#8a4f00' }}>
+        Export runtime bridge: {runtimeBridgeStatus.exportBridgeReady ? 'connected' : 'not connected'}.
+      </p>
+      {!runtimeBridgeStatus.crawlerBridgeReady && (
+        <p style={{ color: '#8a4f00' }}>
+          Start Job needs desktop/backend runtime bridge for Playwright crawling. `apps/web` standalone will fail fast.
+        </p>
+      )}
 
       <form onSubmit={handleSubmit} style={{ display: 'grid', gap: '0.75rem', maxWidth: '680px' }}>
         <label>
