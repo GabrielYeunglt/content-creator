@@ -82,6 +82,7 @@ Build a profile-driven desktop/web app that crawls website content from a start 
 - Results UI now tracks persisted exported artifact records when desktop/backend export bridge is available
 - Start Job now surfaces runtime bridge readiness indicators (crawler/export) to make standalone-web limitations explicit before execution
 - Crawler-engine hardening started: configurable retry/backoff per page with structured error records in crawl results
+- Fixture-based integration smoke tests added for no-next and visited-loop scenarios via local fixture server
 
 ---
 
@@ -101,7 +102,7 @@ Build a profile-driven desktop/web app that crawls website content from a start 
 3. **Execution runtime upgrade**
    - Move crawler fetch/extract from browser to backend runtime to avoid CORS issues.
 4. **Validation/testing pass**
-   - Add fixture-based integration tests for crawl stop conditions and selector extraction.
+   - Expand integration tests from fixture smoke coverage to full crawl/extraction assertions and export artifact checks.
 
 ---
 

@@ -28,3 +28,9 @@ Override with env vars:
 ```bash
 FIXTURE_HOST=0.0.0.0 FIXTURE_PORT=4174 npm run fixtures:serve
 ```
+
+## Run integration checks
+
+```bash
+npm run test:fixtures
+```
