@@ -90,7 +90,7 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
       completedAt: new Date().toISOString(),
       stopReason: 'desktop-crawler-bridge-missing',
       note:
-        'Virtual-browser crawl requires desktop/backend bridge wiring. Running `apps/web` standalone cannot execute Playwright.'
+        'Virtual-browser crawl in this web app path expects a desktop/backend crawler bridge. If your environment injects that bridge, crawl can run; otherwise this standalone app fails fast.'
     });
     onJobsUpdated(failed);
     return;
