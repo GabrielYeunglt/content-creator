@@ -75,11 +75,20 @@ Build a profile-driven desktop/web app that crawls website content from a start 
 ### Results diagnostics
 - Results show status, stop reason, errors, pages processed, last visited URL
 - Per-page extracted records are stored and displayed (`url`, `preview`)
+- Per-page linked asset discovery for `link[rel="stylesheet"]` and `script[src]`
+- Virtual-browser crawler module (`crawler-engine`) added to capture rendered content and JS/CSS via Playwright in backend runtime, including optional content-ready waits and click interaction steps
+- Consolidation layer now builds a canonical document summary (chapter count + metadata) from extracted pages for each completed crawl job
+- Export MVP advanced: export-engine now includes runtime pipelines for HTML, PDF (Playwright), EPUB (epub-gen), and manifest artifacts
+- Results UI now tracks persisted exported artifact records when desktop/backend export bridge is available
+- Start Job now surfaces runtime bridge readiness indicators (crawler/export) to make standalone-web limitations explicit before execution
+- Crawler-engine hardening started: configurable retry/backoff per page with structured error records in crawl results
+- Fixture-based integration checks now cover no-next, visited-loop, shared asset serving, default route behavior, and invalid path handling
+- Added repeatable smoke validation command (`npm run test:smoke`) that runs fixture integration tests and monorepo typecheck
 
 ---
 
 ## ⚠️ Known Limitation
-- Current fetch/extract runs in browser context, so some sites fail due to CORS.
+- Start-job runner calls a desktop/backend crawler bridge for virtual-browser crawling; `apps/web` standalone fails fast with guidance because it cannot run Playwright directly in the browser bundle.
 - Next hardening step should move fetch/extract to desktop/backend runtime (Tauri/Rust or Node sidecar) to remove this limitation.
 
 ---
@@ -89,15 +98,15 @@ Build a profile-driven desktop/web app that crawls website content from a start 
 1. **Consolidation layer**
    - Build canonical chapter/page model from `extractedPages`.
 2. **Export MVP**
-   - Implement HTML -> PDF export.
-   - Implement EPUB export.
+   - Finalize desktop/backend bridge wiring for one-click PDF/EPUB exports in production runtime.
+   - Finalize PDF/EPUB runtime dependency handling across environments.
 3. **Execution runtime upgrade**
    - Move crawler fetch/extract from browser to backend runtime to avoid CORS issues.
 4. **Validation/testing pass**
-   - Add fixture-based integration tests for crawl stop conditions and selector extraction.
+   - Expand integration tests from fixture smoke coverage to full crawl/extraction assertions and export artifact checks.
 
 ---
 
 ## Milestone Snapshot
-- Current milestone: **V1 Step 7**
-- Practical state: **Profile-driven crawling MVP in place, export pipeline pending**.
+- Current milestone: **V1 Step 8**
+- Practical state: **Backend-capable crawl/export plumbing and fixture integration checks in place; production desktop bridge wiring still pending**.
