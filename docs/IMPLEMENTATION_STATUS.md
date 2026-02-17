@@ -81,6 +81,7 @@ Build a profile-driven desktop/web app that crawls website content from a start 
 - Export MVP advanced: export-engine now includes runtime pipelines for HTML, PDF (Playwright), EPUB (epub-gen), and manifest artifacts
 - Results UI now tracks persisted exported artifact records when desktop/backend export bridge is available
 - Start Job now surfaces runtime bridge readiness indicators (crawler/export) to make standalone-web limitations explicit before execution
+- Results panel now includes stop-reason troubleshooting guidance for common runtime failures (missing bridge, crawl runtime error, out-of-domain)
 - Crawler-engine hardening started: configurable retry/backoff per page with structured error records in crawl results
 - Fixture-based integration checks now cover no-next, visited-loop, shared asset serving, default route behavior, and invalid path handling
 - Added repeatable smoke validation command (`npm run test:smoke`) that runs fixture integration tests and monorepo typecheck
@@ -88,7 +89,7 @@ Build a profile-driven desktop/web app that crawls website content from a start 
 ---
 
 ## ⚠️ Known Limitation
-- Start-job runner calls a desktop/backend crawler bridge for virtual-browser crawling; `apps/web` standalone fails fast with guidance because it cannot run Playwright directly in the browser bundle.
+- Start-job runner currently uses a desktop/backend crawler bridge for virtual-browser crawling; by default `apps/web` standalone fails fast with guidance unless your environment injects a compatible runtime bridge.
 - Next hardening step should move fetch/extract to desktop/backend runtime (Tauri/Rust or Node sidecar) to remove this limitation.
 
 ---

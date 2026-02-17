@@ -138,7 +138,8 @@ export function StartJobPanel({ profiles, onJobCreated, onRequestCreateProfile }
       </p>
       {!runtimeBridgeStatus.crawlerBridgeReady && (
         <p style={{ color: '#8a4f00' }}>
-          Start Job needs desktop/backend runtime bridge for Playwright crawling. `apps/web` standalone will fail fast.
+          Start Job in this build expects a desktop/backend crawl bridge for Playwright execution. If your setup injects the bridge,
+          crawling will run; otherwise this standalone app fails fast.
         </p>
       )}
 

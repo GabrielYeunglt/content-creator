@@ -6,6 +6,27 @@ type ResultsPanelProps = {
   onJobsUpdated: (jobs: JobRecord[]) => void;
 };
 
+
+function stopReasonHelp(stopReason: string | undefined): string | null {
+  if (!stopReason) {
+    return null;
+  }
+
+  if (stopReason === 'desktop-crawler-bridge-missing') {
+    return 'Crawler bridge is not connected. Run desktop/backend runtime and expose __CONTENT_CREATOR_DESKTOP_CRAWLER__.';
+  }
+
+  if (stopReason === 'virtual-browser-crawl-error') {
+    return 'Desktop crawl failed. Check backend logs, target URL reachability, and selector configuration.';
+  }
+
+  if (stopReason === 'out-of-domain-blocked') {
+    return 'Next URL left the configured domain. Update profile domain or pagination selector if needed.';
+  }
+
+  return null;
+}
+
 function statusColor(status: JobStatus): string {
   if (status === 'queued') {
     return '#8a4f00';
@@ -70,6 +91,9 @@ export function ResultsPanel({ jobs, onJobsUpdated }: ResultsPanelProps) {
             </p>
           )}
           {job.stopReason && <p>Stop reason: {job.stopReason}</p>}
+          {stopReasonHelp(job.stopReason) && (
+            <p style={{ color: '#8a4f00' }}>Guidance: {stopReasonHelp(job.stopReason)}</p>
+          )}
           {job.consolidatedDocument && (
             <p>
               Consolidated document: <strong>{job.consolidatedDocument.title}</strong> (
