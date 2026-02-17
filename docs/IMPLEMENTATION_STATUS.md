@@ -89,8 +89,8 @@ Build a profile-driven desktop/web app that crawls website content from a start 
 ---
 
 ## ⚠️ Known Limitation
-- Start-job runner currently uses a desktop/backend crawler bridge for virtual-browser crawling; by default `apps/web` standalone fails fast with guidance unless your environment injects a compatible runtime bridge.
-- Next hardening step should move fetch/extract to desktop/backend runtime (Tauri/Rust or Node sidecar) to remove this limitation.
+- Browser-only use (without running the desktop bridge service) still fails fast for crawl/export operations that require backend runtime capabilities.
+- PDF/EPUB export still depends on runtime packages (`playwright`, `epub-gen`) being installed in the bridge environment.
 
 ---
 
@@ -98,16 +98,14 @@ Build a profile-driven desktop/web app that crawls website content from a start 
 
 1. **Consolidation layer**
    - Build canonical chapter/page model from `extractedPages`.
-2. **Export MVP**
-   - Finalize desktop/backend bridge wiring for one-click PDF/EPUB exports in production runtime.
-   - Finalize PDF/EPUB runtime dependency handling across environments.
-3. **Execution runtime upgrade**
-   - Move crawler fetch/extract from browser to backend runtime to avoid CORS issues.
-4. **Validation/testing pass**
+2. **Production packaging**
+   - Package desktop bridge service into Tauri/Electron runtime distribution and startup lifecycle.
+   - Finalize runtime dependency provisioning (`playwright`, `epub-gen`) across deployment targets.
+3. **Validation/testing pass**
    - Expand integration tests from fixture smoke coverage to full crawl/extraction assertions and export artifact checks.
 
 ---
 
 ## Milestone Snapshot
-- Current milestone: **V1 Step 8**
-- Practical state: **Backend-capable crawl/export plumbing and fixture integration checks in place; production desktop bridge wiring still pending**.
+- Current milestone: **V1 Step 9**
+- Practical state: **Backend crawl/export bridge service is now implemented for local/dev runtime; production desktop packaging and deeper end-to-end coverage remain**.

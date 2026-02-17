@@ -14,6 +14,7 @@
     "lint": "npm run -ws lint",
     "fixtures:serve": "node scripts/serve-fixtures.mjs",
     "test:fixtures": "node --test tests/fixtures/fixture-server.integration.mjs",
-    "test:smoke": "npm run test:fixtures && npm run typecheck"
+    "test:smoke": "npm run test:fixtures && npm run typecheck",
+    "dev:desktop": "npm --workspace @content-creator/desktop run dev"
   }
 }

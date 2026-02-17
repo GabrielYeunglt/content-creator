@@ -1,0 +1,11 @@
+{
+  "name": "@content-creator/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --experimental-strip-types src/bridge-server.ts",
+    "typecheck": "echo 'typecheck placeholder for @content-creator/desktop'",
+    "lint": "echo 'lint placeholder for @content-creator/desktop'"
+  }
+}
