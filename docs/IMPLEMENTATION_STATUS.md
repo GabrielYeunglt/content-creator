@@ -83,6 +83,7 @@ Build a profile-driven desktop/web app that crawls website content from a start 
 - Start Job now surfaces runtime bridge readiness indicators (crawler/export) to make standalone-web limitations explicit before execution
 - Crawler-engine hardening started: configurable retry/backoff per page with structured error records in crawl results
 - Fixture-based integration checks now cover no-next, visited-loop, shared asset serving, default route behavior, and invalid path handling
+- Added repeatable smoke validation command (`npm run test:smoke`) that runs fixture integration tests and monorepo typecheck
 
 ---
 
@@ -107,5 +108,5 @@ Build a profile-driven desktop/web app that crawls website content from a start 
 ---
 
 ## Milestone Snapshot
-- Current milestone: **V1 Step 7**
-- Practical state: **Profile-driven crawling MVP in place, export pipeline pending**.
+- Current milestone: **V1 Step 8**
+- Practical state: **Backend-capable crawl/export plumbing and fixture integration checks in place; production desktop bridge wiring still pending**.
