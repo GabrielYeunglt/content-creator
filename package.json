@@ -11,6 +11,9 @@
     "dev:web": "npm --workspace @content-creator/web run dev",
     "build:web": "npm --workspace @content-creator/web run build",
     "typecheck": "npm run -ws typecheck",
-    "lint": "npm run -ws lint"
+    "lint": "npm run -ws lint",
+    "fixtures:serve": "node scripts/serve-fixtures.mjs",
+    "test:fixtures": "node --test tests/fixtures/fixture-server.integration.mjs",
+    "test:smoke": "npm run test:fixtures && npm run typecheck"
   }
 }
