@@ -6,6 +6,7 @@ export type SelectorRule = {
   selector: string;
   extractMode: 'text' | 'html' | 'attribute';
   attributeName?: string;
+  attributeUrlMode?: 'value' | 'fetch-image-data-url';
   required?: boolean;
 };
 
