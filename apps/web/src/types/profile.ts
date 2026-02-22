@@ -97,6 +97,10 @@ export const defaultProfileDraft = {
   nextSelectorType: 'css' as SelectorType,
   nextSelector: '',
   nextAttributeName: 'href',
+  nextNavigationMode: 'url-attribute' as 'url-attribute' | 'click',
+  totalPagesSelectorType: 'css' as SelectorType,
+  totalPagesSelector: '',
+  totalPagesAttributeName: '',
   maxPages: 100
 };
 

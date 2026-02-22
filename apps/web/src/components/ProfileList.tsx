@@ -27,6 +27,12 @@ export function ProfileList({ profiles, onCreateNew, onEdit, onDelete }: Profile
           <p>
             Next selector: <code>{profile.paginationRule.selectorType}</code> <code>{profile.paginationRule.selector}</code>
           </p>
+          <p>
+            Next navigation: <code>{profile.paginationRule.navigationMode ?? 'url-attribute'}</code>
+          </p>
+          <p>
+            Total-pages rule: {profile.totalPagesRule?.selector ? <code>{profile.totalPagesRule.selector}</code> : 'not set'}
+          </p>
           <p>Optional metadata extractions: {profile.metadataRules?.length ?? 0}</p>
           <div style={{ display: 'flex', gap: '0.5rem' }}>
             <button type="button" onClick={() => onEdit(profile.id)}>
