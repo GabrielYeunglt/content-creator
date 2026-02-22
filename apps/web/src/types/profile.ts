@@ -1,6 +1,17 @@
 export type SelectorType = 'css' | 'xpath';
 
 export type ExtractMode = 'text' | 'html' | 'attribute';
+export type AttributeUrlMode = 'value' | 'fetch-image-data-url';
+export type MetadataFieldType =
+  | 'title'
+  | 'author'
+  | 'chapter'
+  | 'publisher'
+  | 'series'
+  | 'cover'
+  | 'language'
+  | 'description'
+  | 'other';
 
 export type SelectorRule = {
   id: string;
@@ -9,6 +20,7 @@ export type SelectorRule = {
   selector: string;
   extractMode: ExtractMode;
   attributeName?: string;
+  attributeUrlMode?: AttributeUrlMode;
   required: boolean;
 };
 
@@ -29,6 +41,16 @@ export type WebsiteProfile = {
   name: string;
   domain: string;
   selectorRules: SelectorRule[];
+  metadataRules?: Array<{
+    id: string;
+    fieldType: MetadataFieldType;
+    customFieldName?: string;
+    selectorType: SelectorType;
+    selector: string;
+    extractMode: ExtractMode;
+    attributeName?: string;
+    attributeUrlMode?: AttributeUrlMode;
+  }>;
   paginationRule: PaginationRule;
   stopRules: StopRules;
   createdAt: string;
@@ -53,6 +75,17 @@ export const defaultProfileDraft = {
   extractMode: defaultSelectorRule.extractMode,
   required: defaultSelectorRule.required,
   contentAttributeName: 'href',
+  contentAttributeUrlMode: 'value' as AttributeUrlMode,
+  metadataRules: [] as Array<{
+    id: string;
+    fieldType: MetadataFieldType;
+    customFieldName: string;
+    selectorType: SelectorType;
+    selector: string;
+    extractMode: ExtractMode;
+    attributeName: string;
+    attributeUrlMode: AttributeUrlMode;
+  }>,
   nextSelectorType: 'css' as SelectorType,
   nextSelector: '',
   nextAttributeName: 'href',

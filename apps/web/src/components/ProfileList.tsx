@@ -27,6 +27,7 @@ export function ProfileList({ profiles, onCreateNew, onEdit, onDelete }: Profile
           <p>
             Next selector: <code>{profile.paginationRule.selectorType}</code> <code>{profile.paginationRule.selector}</code>
           </p>
+          <p>Optional metadata extractions: {profile.metadataRules?.length ?? 0}</p>
           <div style={{ display: 'flex', gap: '0.5rem' }}>
             <button type="button" onClick={() => onEdit(profile.id)}>
               Edit

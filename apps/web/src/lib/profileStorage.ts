@@ -25,7 +25,12 @@ function sanitizeProfile(candidate: Partial<WebsiteProfile>): WebsiteProfile | n
     return null;
   }
 
-  const selectorRules = (candidate.selectorRules ?? []).filter((rule) => rule.selector.trim().length > 0);
+  const selectorRules = (candidate.selectorRules ?? [])
+    .filter((rule) => rule.selector.trim().length > 0)
+    .map((rule) => ({
+      ...rule,
+      attributeUrlMode: rule.attributeUrlMode ?? defaultProfileDraft.contentAttributeUrlMode
+    }));
   if (selectorRules.length === 0) {
     return null;
   }
@@ -35,6 +40,13 @@ function sanitizeProfile(candidate: Partial<WebsiteProfile>): WebsiteProfile | n
     name: candidate.name.trim(),
     domain: normalizeDomain(candidate.domain),
     selectorRules,
+    metadataRules: (candidate.metadataRules ?? [])
+      .filter((rule) => rule.selector.trim().length > 0)
+      .map((rule) => ({
+        ...rule,
+        customFieldName: rule.customFieldName?.trim() || '',
+        attributeUrlMode: rule.attributeUrlMode ?? defaultProfileDraft.contentAttributeUrlMode
+      })),
     paginationRule: {
       selectorType: validSelectorType(candidate.paginationRule.selectorType)
         ? candidate.paginationRule.selectorType
@@ -83,9 +95,22 @@ function buildProfile(draft: ProfileDraft, id: string, createdAt: string): Websi
         selector: draft.selector.trim(),
         extractMode: draft.extractMode,
         attributeName: draft.contentAttributeName.trim() || 'href',
+        attributeUrlMode: draft.contentAttributeUrlMode,
         required: draft.required
       }
     ],
+    metadataRules: draft.metadataRules
+      .filter((rule) => rule.selector.trim().length > 0)
+      .map((rule) => ({
+        id: rule.id || crypto.randomUUID(),
+        fieldType: rule.fieldType,
+        customFieldName: rule.customFieldName.trim(),
+        selectorType: rule.selectorType,
+        selector: rule.selector.trim(),
+        extractMode: rule.extractMode,
+        attributeName: rule.attributeName.trim() || 'href',
+        attributeUrlMode: rule.attributeUrlMode
+      })),
     paginationRule: {
       selectorType: draft.nextSelectorType,
       selector: draft.nextSelector.trim(),
@@ -132,6 +157,17 @@ export function profileToDraft(profile: WebsiteProfile): ProfileDraft {
     extractMode: primary?.extractMode ?? defaultProfileDraft.extractMode,
     required: primary?.required ?? defaultProfileDraft.required,
     contentAttributeName: primary?.attributeName ?? defaultProfileDraft.contentAttributeName,
+    contentAttributeUrlMode: primary?.attributeUrlMode ?? defaultProfileDraft.contentAttributeUrlMode,
+    metadataRules: (profile.metadataRules ?? []).map((rule) => ({
+      id: rule.id,
+      fieldType: rule.fieldType,
+      customFieldName: rule.customFieldName ?? '',
+      selectorType: rule.selectorType,
+      selector: rule.selector,
+      extractMode: rule.extractMode,
+      attributeName: rule.attributeName ?? 'href',
+      attributeUrlMode: rule.attributeUrlMode ?? defaultProfileDraft.contentAttributeUrlMode
+    })),
     nextSelectorType: profile.paginationRule.selectorType,
     nextSelector: profile.paginationRule.selector,
     nextAttributeName: profile.paginationRule.attributeName,
