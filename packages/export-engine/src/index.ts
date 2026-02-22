@@ -37,13 +37,9 @@ export function renderCanonicalHtml(document: CanonicalDocument): string {
     )
     .join('\n');
 
-<<<<<<< HEAD
   const metadataHtml = Object.entries(document.metadata)
     .map(([key, value]) => `<li><strong>${escapeHtml(toLabel(key))}:</strong> ${escapeHtml(value)}</li>`)
     .join('');
-
-=======
->>>>>>> 6d414060f5b901795e0a0f23b51998d2bc638ed3
   return `<!doctype html>
 <html lang="en">
   <head>
@@ -57,20 +53,14 @@ export function renderCanonicalHtml(document: CanonicalDocument): string {
       .chapter-body { margin-top: 12px; }
       .chapter-body img { max-width: 100%; height: auto; display: block; }
       .meta { color: #666; font-size: 0.9rem; }
-<<<<<<< HEAD
       .meta-list { color: #444; font-size: 0.95rem; }
-=======
->>>>>>> 6d414060f5b901795e0a0f23b51998d2bc638ed3
     </style>
   </head>
   <body>
     <h1>${escapeHtml(document.title)}</h1>
     <p class="meta">Source domain: ${escapeHtml(document.sourceDomain)}</p>
     <p class="meta">Generated at: ${escapeHtml(document.generatedAt)}</p>
-<<<<<<< HEAD
     ${metadataHtml ? `<ul class="meta-list">${metadataHtml}</ul>` : ''}
-=======
->>>>>>> 6d414060f5b901795e0a0f23b51998d2bc638ed3
     ${chapterHtml}
   </body>
 </html>`;
@@ -96,10 +86,7 @@ export function renderEpubLikeManifest(document: CanonicalDocument): string {
       title: document.title,
       sourceDomain: document.sourceDomain,
       generatedAt: document.generatedAt,
-<<<<<<< HEAD
       metadata: document.metadata,
-=======
->>>>>>> 6d414060f5b901795e0a0f23b51998d2bc638ed3
       chapters: document.chapters.map((chapter) => ({
         id: chapter.id,
         title: chapter.title,
@@ -190,39 +177,28 @@ async function renderEpubFromCanonicalDocument(params: {
     options: {
       title: string;
       author: string;
-<<<<<<< HEAD
       publisher?: string;
       cover?: string;
       description?: string;
       language?: string;
-=======
->>>>>>> 6d414060f5b901795e0a0f23b51998d2bc638ed3
       content: Array<{ title: string; data: string }>;
     },
     output: string
   ) => { promise?: Promise<unknown> };
 
-  const content = document.chapters.map((chapter) => ({
+  const content = await prepareEpubContent(document.chapters.map((chapter) => ({
     title: chapter.title,
-<<<<<<< HEAD
-    data: renderChapterBody(chapter.bodyHtml)
-=======
-    data: chapter.bodyHtml
->>>>>>> 6d414060f5b901795e0a0f23b51998d2bc638ed3
-  }));
+    bodyHtml: renderChapterBody(chapter.bodyHtml)
+  })));
 
   const instance = new EpubConstructor(
     {
       title: document.title,
-<<<<<<< HEAD
       author: document.metadata.author || document.sourceDomain,
       publisher: document.metadata.publisher,
       cover: document.metadata.cover,
       description: document.metadata.description,
       language: document.metadata.language,
-=======
-      author: document.sourceDomain,
->>>>>>> 6d414060f5b901795e0a0f23b51998d2bc638ed3
       content
     },
     outputEpubPath
@@ -236,15 +212,88 @@ async function renderEpubFromCanonicalDocument(params: {
   throw new Error('epub-gen did not return a promise; check runtime package version.');
 }
 
-<<<<<<< HEAD
 function toLabel(key: string): string {
   return key
     .replaceAll('_', ' ')
     .replace(/\b\w/g, (match) => match.toUpperCase());
 }
 
-=======
->>>>>>> 6d414060f5b901795e0a0f23b51998d2bc638ed3
+async function prepareEpubContent(
+  chapters: Array<{ title: string; bodyHtml: string }>
+): Promise<Array<{ title: string; data: string }>> {
+  const osModuleName = 'node:os';
+  const pathModuleName = 'node:path';
+  const fsModuleName = 'node:fs/promises';
+  const cryptoModuleName = 'node:crypto';
+
+  const os = await import(/* @vite-ignore */ osModuleName);
+  const path = await import(/* @vite-ignore */ pathModuleName);
+  const fs = (await import(/* @vite-ignore */ fsModuleName)) as {
+    mkdir: (path: string, options: { recursive: boolean }) => Promise<void>;
+    writeFile: (path: string, data: Uint8Array) => Promise<void>;
+  };
+  const { createHash, randomUUID } = await import(/* @vite-ignore */ cryptoModuleName);
+
+  const assetDir = path.join(os.tmpdir(), 'content-creator-epub-assets', randomUUID());
+  await fs.mkdir(assetDir, { recursive: true });
+
+  return Promise.all(
+    chapters.map(async (chapter, chapterIndex) => ({
+      title: chapter.title,
+      data: await replaceDataImageUrls(chapter.bodyHtml, assetDir, chapterIndex, createHash, fs, path)
+    }))
+  );
+}
+
+async function replaceDataImageUrls(
+  html: string,
+  assetDir: string,
+  chapterIndex: number,
+  createHash: (algorithm: string) => { update: (value: string) => { digest: (encoding: 'hex') => string } },
+  fs: { writeFile: (path: string, data: Uint8Array) => Promise<void> },
+  path: { join: (...paths: string[]) => string }
+): Promise<string> {
+  const dataImageRegex = /<img\b([^>]*?)\bsrc=["'](data:image\/[^"']+)["']([^>]*?)>/gi;
+
+  let updatedHtml = html;
+  let match: RegExpExecArray | null;
+  let imageIndex = 0;
+
+  while ((match = dataImageRegex.exec(html)) !== null) {
+    const dataUrl = match[2];
+    const parsed = parseDataImageUrl(dataUrl);
+
+    if (!parsed) {
+      continue;
+    }
+
+    const digest = createHash('sha1').update(dataUrl).digest('hex');
+    const fileName = `chapter-${chapterIndex + 1}-${imageIndex + 1}-${digest.slice(0, 10)}.${parsed.extension}`;
+    imageIndex += 1;
+    const imagePath = path.join(assetDir, fileName);
+
+    await fs.writeFile(imagePath, parsed.data);
+    updatedHtml = updatedHtml.replace(dataUrl, imagePath);
+  }
+
+  return updatedHtml;
+}
+
+function parseDataImageUrl(dataUrl: string): { data: Uint8Array; extension: string } | null {
+  const match = dataUrl.match(/^data:image\/([\w.+-]+);base64,(.+)$/i);
+  if (!match) {
+    return null;
+  }
+
+  const extension = match[1].toLowerCase() === 'jpeg' ? 'jpg' : match[1].toLowerCase();
+  const nodeBuffer = (globalThis as { Buffer?: { from: (value: string, encoding: 'base64') => Uint8Array } }).Buffer;
+  if (!nodeBuffer) {
+    return null;
+  }
+
+  const bytes = nodeBuffer.from(match[2], 'base64');
+  return { data: new Uint8Array(bytes), extension };
+}
 function escapeHtml(value: string): string {
   return value
     .replaceAll('&', '&amp;')
