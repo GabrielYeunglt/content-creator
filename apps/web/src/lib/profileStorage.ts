@@ -52,8 +52,18 @@ function sanitizeProfile(candidate: Partial<WebsiteProfile>): WebsiteProfile | n
         ? candidate.paginationRule.selectorType
         : 'css',
       selector: candidate.paginationRule.selector.trim(),
-      attributeName: candidate.paginationRule.attributeName?.trim() || 'href'
+      attributeName: candidate.paginationRule.attributeName?.trim() || 'href',
+      navigationMode: candidate.paginationRule.navigationMode === 'click' ? 'click' : 'url-attribute'
     },
+    totalPagesRule: candidate.totalPagesRule && candidate.totalPagesRule.selector?.trim()
+      ? {
+        selectorType: validSelectorType(candidate.totalPagesRule.selectorType)
+          ? candidate.totalPagesRule.selectorType
+          : 'css',
+        selector: candidate.totalPagesRule.selector.trim(),
+        attributeName: candidate.totalPagesRule.attributeName?.trim() || undefined
+      }
+      : undefined,
     stopRules: {
       stopWhenNoNextButton: Boolean(candidate.stopRules.stopWhenNoNextButton),
       stopWhenUrlVisited: Boolean(candidate.stopRules.stopWhenUrlVisited),
@@ -114,8 +124,16 @@ function buildProfile(draft: ProfileDraft, id: string, createdAt: string): Websi
     paginationRule: {
       selectorType: draft.nextSelectorType,
       selector: draft.nextSelector.trim(),
-      attributeName: draft.nextAttributeName.trim() || 'href'
+      attributeName: draft.nextAttributeName.trim() || 'href',
+      navigationMode: draft.nextNavigationMode
     },
+    totalPagesRule: draft.totalPagesSelector.trim()
+      ? {
+        selectorType: draft.totalPagesSelectorType,
+        selector: draft.totalPagesSelector.trim(),
+        attributeName: draft.totalPagesAttributeName.trim() || undefined
+      }
+      : undefined,
     stopRules: {
       stopWhenNoNextButton: true,
       stopWhenUrlVisited: true,
@@ -171,6 +189,10 @@ export function profileToDraft(profile: WebsiteProfile): ProfileDraft {
     nextSelectorType: profile.paginationRule.selectorType,
     nextSelector: profile.paginationRule.selector,
     nextAttributeName: profile.paginationRule.attributeName,
+    nextNavigationMode: profile.paginationRule.navigationMode ?? 'url-attribute',
+    totalPagesSelectorType: profile.totalPagesRule?.selectorType ?? defaultProfileDraft.totalPagesSelectorType,
+    totalPagesSelector: profile.totalPagesRule?.selector ?? defaultProfileDraft.totalPagesSelector,
+    totalPagesAttributeName: profile.totalPagesRule?.attributeName ?? defaultProfileDraft.totalPagesAttributeName,
     maxPages: profile.stopRules.maxPages
   };
 }

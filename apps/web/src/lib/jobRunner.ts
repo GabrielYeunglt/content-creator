@@ -32,6 +32,12 @@ type VirtualBrowserCrawlRequest = {
     selectorType: 'css' | 'xpath';
     selector: string;
     attributeName: string;
+    navigationMode?: 'url-attribute' | 'click';
+  };
+  totalPagesRule?: {
+    selectorType: 'css' | 'xpath';
+    selector: string;
+    attributeName?: string;
   };
   stopRules: {
     maxPages: number;
@@ -48,6 +54,7 @@ type VirtualBrowserCrawlResponse = {
   pagesProcessed: number;
   stopReason: string;
   errors?: Array<{ url: string; attempt: number; error: string }>;
+  notes?: string[];
   pages: Array<{
     url: string;
     content: string;
@@ -133,8 +140,16 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
       paginationRule: {
         selectorType: profile.paginationRule.selectorType,
         selector: profile.paginationRule.selector,
-        attributeName: profile.paginationRule.attributeName
+        attributeName: profile.paginationRule.attributeName,
+        navigationMode: profile.paginationRule.navigationMode
       },
+      totalPagesRule: profile.totalPagesRule
+        ? {
+          selectorType: profile.totalPagesRule.selectorType,
+          selector: profile.totalPagesRule.selector,
+          attributeName: profile.totalPagesRule.attributeName
+        }
+        : undefined,
       stopRules: {
         maxPages: Math.max(1, profile.stopRules.maxPages),
         maxConsecutiveErrors: 3
@@ -188,6 +203,15 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
         message: `Crawl completed: ${result.pagesProcessed} page(s), stop reason ${result.stopReason}.`
       })
     );
+
+    for (const note of result.notes ?? []) {
+      onJobsUpdated(
+        appendJobLog(jobId, {
+          level: 'info',
+          message: note
+        })
+      );
+    }
 
     for (const issue of result.errors ?? []) {
       onJobsUpdated(

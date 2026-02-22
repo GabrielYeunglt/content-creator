@@ -50,6 +50,7 @@ export function ProfileEditorForm({ mode, draft, onChange, onSave, onCancel }: P
         : `Next selector error: ${nextResult.error}`
     ];
 
+
     setTestOutput(lines.join('\n'));
   }
 
@@ -307,12 +308,62 @@ export function ProfileEditorForm({ mode, draft, onChange, onSave, onCancel }: P
               />
             </label>
             <label>
+              Pagination Navigation
+              <select
+                value={draft.nextNavigationMode}
+                onChange={(event) => onChange('nextNavigationMode', event.target.value as 'url-attribute' | 'click')}
+              >
+                <option value="url-attribute">Extract next URL from attribute</option>
+                <option value="click">Click next button (JS-driven)</option>
+              </select>
+            </label>
+
+            <label>
               Max Pages
               <input
                 type="number"
                 min={1}
                 value={draft.maxPages}
                 onChange={(event) => onChange('maxPages', Number.parseInt(event.target.value, 10) || 1)}
+              />
+            </label>
+          </div>
+        </fieldset>
+
+
+
+        <fieldset style={{ border: '1px solid #ddd', padding: '0.75rem' }}>
+          <legend>Optional Total Pages Rule</legend>
+          <p style={{ marginTop: 0 }}>
+            If configured and extracted successfully, crawling stops when processed page count reaches this value.
+          </p>
+          <div style={{ display: 'grid', gap: '0.5rem' }}>
+            <label>
+              Selector Type
+              <select
+                value={draft.totalPagesSelectorType}
+                onChange={(event) => onChange('totalPagesSelectorType', event.target.value as SelectorType)}
+              >
+                <option value="css">CSS</option>
+                <option value="xpath">XPath</option>
+              </select>
+            </label>
+            <label>
+              Total Pages Selector (optional)
+              <input
+                value={draft.totalPagesSelector}
+                onChange={(event) => onChange('totalPagesSelector', event.target.value)}
+                style={{ width: '100%' }}
+                placeholder=".page-count"
+              />
+            </label>
+            <label>
+              Total Pages Attribute (optional)
+              <input
+                value={draft.totalPagesAttributeName}
+                onChange={(event) => onChange('totalPagesAttributeName', event.target.value)}
+                style={{ width: '100%' }}
+                placeholder="leave empty to use textContent"
               />
             </label>
           </div>
