@@ -172,44 +172,89 @@ async function renderEpubFromCanonicalDocument(params: {
 }): Promise<void> {
   const { document, outputEpubPath } = params;
 
-  const epubModuleName = 'epub-gen';
-  const EpubConstructor = (await import(/* @vite-ignore */ epubModuleName)).default as new (
-    options: {
-      title: string;
-      author: string;
-      publisher?: string;
-      cover?: string;
-      description?: string;
-      language?: string;
-      content: Array<{ title: string; data: string }>;
-    },
-    output: string
-  ) => { promise?: Promise<unknown> };
+  try {
+    const epubModuleName = 'epub-gen';
+    const EpubConstructor = (await import(/* @vite-ignore */ epubModuleName)).default as new (
+      options: {
+        title: string;
+        author: string;
+        publisher?: string;
+        cover?: string;
+        description?: string;
+        language?: string;
+        content: Array<{ title: string; data: string }>;
+      },
+      output: string
+    ) => { promise?: Promise<unknown> };
 
-  const content = await prepareEpubContent(document.chapters.map((chapter) => ({
-    title: chapter.title,
-    bodyHtml: renderChapterBody(chapter.bodyHtml)
-  })));
+    const content = await prepareEpubContent(document.chapters.map((chapter) => ({
+      title: chapter.title,
+      bodyHtml: renderChapterBody(chapter.bodyHtml)
+    })));
 
-  const instance = new EpubConstructor(
-    {
-      title: document.title,
-      author: document.metadata.author || document.sourceDomain,
-      publisher: document.metadata.publisher,
-      cover: document.metadata.cover,
-      description: document.metadata.description,
-      language: document.metadata.language,
-      content
-    },
-    outputEpubPath
-  );
+    const unresolvedDataUrlCount = content.reduce(
+      (count, chapter) => count + (chapter.data.match(/data:image\//gi)?.length ?? 0),
+      0
+    );
+    if (unresolvedDataUrlCount > 0) {
+      throw new Error(`EPUB content still contains ${unresolvedDataUrlCount} unresolved data:image URL(s) after asset replacement.`);
+    }
 
-  if (instance.promise) {
-    await instance.promise;
-    return;
+    const instance = new EpubConstructor(
+      {
+        title: document.title,
+        author: document.metadata.author || document.sourceDomain,
+        publisher: document.metadata.publisher,
+        cover: document.metadata.cover,
+        description: document.metadata.description,
+        language: document.metadata.language,
+        content
+      },
+      outputEpubPath
+    );
+
+    if (instance.promise) {
+      await instance.promise;
+      return;
+    }
+
+    throw new Error('epub-gen did not return a promise; check runtime package version.');
+  } catch (error) {
+    const enrichedMessage = [
+      'EPUB export failed.',
+      `documentId=${document.id}`,
+      `title=${JSON.stringify(document.title)}`,
+      `outputPath=${JSON.stringify(outputEpubPath)}`,
+      `chapterCount=${document.chapters.length}`,
+      formatErrorDetails(error)
+    ].join(' ');
+    throw new Error(enrichedMessage);
+  }
+}
+
+
+function formatErrorDetails(error: unknown): string {
+  if (!error || typeof error !== 'object') {
+    return `error=${JSON.stringify(String(error))}`;
   }
 
-  throw new Error('epub-gen did not return a promise; check runtime package version.');
+  const errorWithFields = error as {
+    message?: string;
+    code?: string;
+    errno?: number;
+    syscall?: string;
+    path?: string;
+  };
+
+  const details = [
+    `errorMessage=${JSON.stringify(errorWithFields.message ?? 'Unknown error')}`,
+    `code=${JSON.stringify(errorWithFields.code ?? null)}`,
+    `errno=${JSON.stringify(errorWithFields.errno ?? null)}`,
+    `syscall=${JSON.stringify(errorWithFields.syscall ?? null)}`,
+    `path=${JSON.stringify(errorWithFields.path ?? null)}`
+  ];
+
+  return details.join(' ');
 }
 
 function toLabel(key: string): string {
@@ -280,7 +325,7 @@ async function replaceDataImageUrls(
 }
 
 function parseDataImageUrl(dataUrl: string): { data: Uint8Array; extension: string } | null {
-  const match = dataUrl.match(/^data:image\/([\w.+-]+);base64,(.+)$/i);
+  const match = dataUrl.match(/^data:image\/([\w.+-]+)(?:;[^;,=]+=[^;,]+)*(?:;base64),(.+)$/i);
   if (!match) {
     return null;
   }
