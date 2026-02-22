@@ -45,4 +45,9 @@ export type JobRecord = {
   lastVisitedUrl?: string;
   consolidatedDocument?: ConsolidatedDocumentRecord;
   exportedArtifacts?: ExportedArtifactRecord[];
+  logs?: Array<{
+    at: string;
+    level: 'info' | 'warn' | 'error';
+    message: string;
+  }>;
 };

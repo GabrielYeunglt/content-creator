@@ -139,6 +139,19 @@ export function ResultsPanel({ jobs, onJobsUpdated }: ResultsPanelProps) {
             </details>
           )}
 
+          {job.logs && job.logs.length > 0 && (
+            <details>
+              <summary>Job log ({job.logs.length})</summary>
+              <ul>
+                {job.logs.map((entry, index) => (
+                  <li key={`${job.id}-log-${index}`}>
+                    [{new Date(entry.at).toLocaleString()}] <strong>{entry.level.toUpperCase()}</strong> {entry.message}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+
           {job.extractedPages && job.extractedPages.length > 0 && (
             <details>
               <summary>Extracted pages ({job.extractedPages.length})</summary>

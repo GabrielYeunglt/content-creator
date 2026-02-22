@@ -81,6 +81,7 @@ Build a profile-driven desktop/web app that crawls website content from a start 
 - Consolidation layer now builds a canonical document summary (chapter count + metadata) from extracted pages for each completed crawl job
 - Export MVP advanced: export-engine now includes runtime pipelines for HTML, PDF (Playwright), EPUB (epub-gen), and manifest artifacts
 - Results UI now tracks persisted exported artifact records when desktop/backend export bridge is available
+- Results UI now includes a reviewable per-job log timeline (info/warn/error) for crawl diagnostics
 - Start Job now surfaces runtime bridge readiness indicators (crawler/export) to make standalone-web limitations explicit before execution
 - Results panel now includes stop-reason troubleshooting guidance for common runtime failures (missing bridge, crawl runtime error, out-of-domain)
 - Crawler-engine hardening started: configurable retry/backoff per page with structured error records in crawl results

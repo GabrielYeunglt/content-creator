@@ -29,6 +29,11 @@ declare global {
     }) => Promise<{
       pagesProcessed: number;
       stopReason: string;
+      errors?: Array<{
+        url: string;
+        attempt: number;
+        error: string;
+      }>;
       pages: Array<{
         url: string;
         content: string;

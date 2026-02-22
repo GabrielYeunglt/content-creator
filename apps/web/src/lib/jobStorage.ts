@@ -52,3 +52,34 @@ export function updateJob(jobId: string, patch: Partial<JobRecord>): JobRecord[]
   writeJobs(updated);
   return updated;
 }
+
+export function appendJobLog(
+  jobId: string,
+  entry: {
+    level: 'info' | 'warn' | 'error';
+    message: string;
+    at?: string;
+  }
+): JobRecord[] {
+  const jobs = readJobs();
+  const updated = jobs.map((job) => {
+    if (job.id !== jobId) {
+      return job;
+    }
+
+    return {
+      ...job,
+      logs: [
+        ...(job.logs ?? []),
+        {
+          at: entry.at ?? new Date().toISOString(),
+          level: entry.level,
+          message: entry.message
+        }
+      ]
+    };
+  });
+
+  writeJobs(updated);
+  return updated;
+}

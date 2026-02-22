@@ -1,5 +1,5 @@
 import { buildCanonicalDocument } from '../../../../packages/core/src';
-import { updateJob, updateJobStatus } from './jobStorage';
+import { appendJobLog, updateJob, updateJobStatus } from './jobStorage';
 import type { ExtractedPageRecord, JobRecord } from '../types/job';
 import type { WebsiteProfile } from '../types/profile';
 
@@ -38,6 +38,7 @@ type VirtualBrowserCrawlRequest = {
 type VirtualBrowserCrawlResponse = {
   pagesProcessed: number;
   stopReason: string;
+  errors?: Array<{ url: string; attempt: number; error: string }>;
   pages: Array<{
     url: string;
     content: string;
@@ -83,6 +84,7 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
 
   const running = updateJobStatus(jobId, 'running', 'Running virtual-browser crawl...');
   onJobsUpdated(running);
+  onJobsUpdated(appendJobLog(jobId, { level: 'info', message: `Job started for ${startUrl}` }));
 
   const bridge = getDesktopCrawlerBridge();
   if (!bridge) {
@@ -94,6 +96,7 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
         'Virtual-browser crawl in this web app path expects a desktop/backend crawler bridge. If your environment injects that bridge, crawl can run; otherwise this standalone app fails fast.'
     });
     onJobsUpdated(failed);
+    onJobsUpdated(appendJobLog(jobId, { level: 'error', message: 'Desktop crawler bridge missing.' }));
     return;
   }
 
@@ -157,6 +160,21 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
     });
 
     onJobsUpdated(completed);
+    onJobsUpdated(
+      appendJobLog(jobId, {
+        level: 'info',
+        message: `Crawl completed: ${result.pagesProcessed} page(s), stop reason ${result.stopReason}.`
+      })
+    );
+
+    for (const issue of result.errors ?? []) {
+      onJobsUpdated(
+        appendJobLog(jobId, {
+          level: 'warn',
+          message: `Crawl retry/error at ${issue.url} (attempt ${issue.attempt}): ${issue.error}`
+        })
+      );
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     const failed = updateJob(jobId, {
@@ -168,5 +186,6 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
     });
 
     onJobsUpdated(failed);
+    onJobsUpdated(appendJobLog(jobId, { level: 'error', message: `Crawl failed: ${message}` }));
   }
 }

@@ -84,6 +84,16 @@ type PlaywrightPageLike = {
   waitForSelector: (selector: string, opts: { timeout: number }) => Promise<unknown>;
   click: (selector: string, opts: { timeout: number }) => Promise<void>;
   waitForTimeout: (timeout: number) => Promise<void>;
+  context: () => {
+    request: {
+      get: (url: string, opts?: { headers?: Record<string, string> }) => Promise<{
+        ok: () => boolean;
+        status: () => number;
+        headers: () => Record<string, string>;
+        body: () => Promise<Uint8Array>;
+      }>;
+    };
+  };
 };
 
 type PlaywrightLike = {
@@ -341,37 +351,34 @@ async function resolveContentValue(params: {
   }
 
   try {
-    const fetched = await page.evaluate(
-      async ({ url, timeout }) => {
-        const controller = new AbortController();
-        const timer = window.setTimeout(() => controller.abort(), timeout);
+    const response = await page.context().request.get(absoluteUrl, {
+      headers: {
+        referer: baseUrl,
+        accept: 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8'
+      }
+    });
 
-        try {
-          const response = await fetch(url, { signal: controller.signal });
-          if (!response.ok) {
-            throw new Error(`Failed to fetch resource: ${response.status}`);
-          }
+    if (!response.ok()) {
+      return absoluteUrl;
+    }
 
-          const contentType = (response.headers.get('content-type') ?? '').toLowerCase();
-          if (!contentType.startsWith('image/')) {
-            return url;
-          }
+    const headers = response.headers();
+    const contentType = (headers['content-type'] ?? headers['Content-Type'] ?? '').toLowerCase();
+    if (!contentType.startsWith('image/')) {
+      return absoluteUrl;
+    }
 
-          const bytes = new Uint8Array(await response.arrayBuffer());
-          let binary = '';
-          for (const byte of bytes) {
-            binary += String.fromCharCode(byte);
-          }
+    const body = await Promise.race([
+      response.body(),
+      new Promise<Uint8Array>((_, reject) => setTimeout(() => reject(new Error('Timed out fetching image body')), timeoutMs))
+    ]);
 
-          return `data:${contentType};base64,${btoa(binary)}`;
-        } finally {
-          window.clearTimeout(timer);
-        }
-      },
-      { url: absoluteUrl, timeout: timeoutMs }
-    );
+    const BufferCtor = (globalThis as { Buffer?: { from: (input: Uint8Array) => { toString: (encoding: string) => string } } }).Buffer;
+    if (!BufferCtor) {
+      return absoluteUrl;
+    }
 
-    return fetched;
+    return `data:${contentType};base64,${BufferCtor.from(body).toString('base64')}`;
   } catch {
     return absoluteUrl;
   }
