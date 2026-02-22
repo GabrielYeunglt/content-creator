@@ -129,6 +129,7 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
 
     const extractedPages: ExtractedPageRecord[] = result.pages.map((item) => ({
       url: item.url,
+      content: item.content,
       preview: cleanPreview(item.content),
       stylesheets: item.stylesheets,
       scripts: item.scripts

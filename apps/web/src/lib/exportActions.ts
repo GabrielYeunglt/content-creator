@@ -1,5 +1,5 @@
 import { buildCanonicalDocument } from '../../../../packages/core/src';
-import { renderCanonicalHtml, renderEpubLikeManifest } from '../../../../packages/export-engine/src';
+import { renderCanonicalHtml } from '../../../../packages/export-engine/src';
 import { updateJob } from './jobStorage';
 import type { ExportedArtifactRecord, JobRecord } from '../types/job';
 
@@ -40,7 +40,7 @@ function persistArtifacts(job: JobRecord, artifacts: Array<{ format: ExportedArt
   });
 }
 
-async function runDesktopExport(job: JobRecord, format: 'html' | 'pdf' | 'epub' | 'epub-manifest' | 'all'): Promise<JobRecord[] | null> {
+async function runDesktopExport(job: JobRecord, format: 'html' | 'pdf' | 'epub' | 'all'): Promise<JobRecord[] | null> {
   const bridge = getDesktopExportBridge();
   if (!bridge) {
     return null;
@@ -69,16 +69,15 @@ export async function exportJobAsHtml(job: JobRecord): Promise<JobRecord[] | nul
   return null;
 }
 
-export async function exportJobAsEpubManifest(job: JobRecord): Promise<JobRecord[] | null> {
-  const desktopExport = await runDesktopExport(job, 'epub-manifest');
+export async function exportJobAsEpub(job: JobRecord): Promise<JobRecord[] | null> {
+  const desktopExport = await runDesktopExport(job, 'epub');
   if (desktopExport) {
     return desktopExport;
   }
 
-  const canonical = canonicalFromJob(job);
-  const manifest = renderEpubLikeManifest(canonical);
-  downloadTextFile(`${job.id}.epub-manifest.json`, manifest, 'application/json;charset=utf-8');
-  return null;
+  return updateJob(job.id, {
+    note: 'EPUB export requires the desktop/backend export bridge runtime.'
+  });
 }
 
 export async function exportJobAllViaDesktop(job: JobRecord): Promise<JobRecord[] | null> {

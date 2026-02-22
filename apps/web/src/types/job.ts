@@ -21,6 +21,7 @@ export type StartJobInput = {
 
 export type ExtractedPageRecord = {
   url: string;
+  content: string;
   preview: string;
   stylesheets?: string[];
   scripts?: string[];

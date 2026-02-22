@@ -1,4 +1,4 @@
-import { exportJobAllViaDesktop, exportJobAsEpubManifest, exportJobAsHtml } from '../lib/exportActions';
+import { exportJobAllViaDesktop, exportJobAsEpub, exportJobAsHtml } from '../lib/exportActions';
 import type { JobRecord, JobStatus } from '../types/job';
 
 type ResultsPanelProps = {
@@ -48,8 +48,8 @@ export function ResultsPanel({ jobs, onJobsUpdated }: ResultsPanelProps) {
     }
   }
 
-  async function handleExportManifest(job: JobRecord) {
-    const updated = await exportJobAsEpubManifest(job);
+  async function handleExportEpub(job: JobRecord) {
+    const updated = await exportJobAsEpub(job);
     if (updated) {
       onJobsUpdated(updated);
     }
@@ -117,8 +117,8 @@ export function ResultsPanel({ jobs, onJobsUpdated }: ResultsPanelProps) {
               <button type="button" onClick={() => void handleExportHtml(job)}>
                 Export HTML snapshot
               </button>
-              <button type="button" onClick={() => void handleExportManifest(job)}>
-                Export EPUB manifest
+              <button type="button" onClick={() => void handleExportEpub(job)}>
+                Export EPUB
               </button>
               <button type="button" onClick={() => void handleExportAll(job)}>
                 Export all (desktop bridge)

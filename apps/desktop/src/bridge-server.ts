@@ -11,9 +11,10 @@ import {
 
 type ExportRequest = {
   jobId: string;
-  format: 'html' | 'pdf' | 'epub' | 'epub-manifest' | 'all';
+  format: 'html' | 'pdf' | 'epub' | 'all';
   pages: Array<{
     url: string;
+    content?: string;
     preview: string;
     stylesheets?: string[];
     scripts?: string[];
@@ -64,7 +65,6 @@ function createArtifactPaths(request: ExportRequest): {
   htmlPath?: string;
   pdfPath?: string;
   epubPath?: string;
-  epubManifestPath?: string;
 } {
   const now = new Date().toISOString().replaceAll(':', '-');
   const baseName = `${sanitizeFilePart(request.jobId)}-${now}`;
@@ -73,11 +73,7 @@ function createArtifactPaths(request: ExportRequest): {
   return {
     htmlPath: includeAll || request.format === 'html' ? join(artifactRoot, `${baseName}.html`) : undefined,
     pdfPath: includeAll || request.format === 'pdf' ? join(artifactRoot, `${baseName}.pdf`) : undefined,
-    epubPath: includeAll || request.format === 'epub' ? join(artifactRoot, `${baseName}.epub`) : undefined,
-    epubManifestPath:
-      includeAll || request.format === 'epub-manifest'
-        ? join(artifactRoot, `${baseName}.epub-manifest.json`)
-        : undefined
+    epubPath: includeAll || request.format === 'epub' ? join(artifactRoot, `${baseName}.epub`) : undefined
   };
 }
 
@@ -98,6 +94,7 @@ async function handleExport(request: ExportRequest): Promise<{ artifacts: Export
     profileDomain: request.profileDomain,
     pages: request.pages.map((page) => ({
       url: page.url,
+      content: page.content,
       preview: page.preview,
       stylesheets: page.stylesheets,
       scripts: page.scripts
@@ -109,8 +106,7 @@ async function handleExport(request: ExportRequest): Promise<{ artifacts: Export
     document: canonical,
     outputHtmlPath: paths.htmlPath,
     outputPdfPath: paths.pdfPath,
-    outputEpubPath: paths.epubPath,
-    outputEpubManifestPath: paths.epubManifestPath
+    outputEpubPath: paths.epubPath
   });
 
   const normalized = artifacts.map((artifact) => ({

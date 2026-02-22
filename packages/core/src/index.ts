@@ -28,6 +28,7 @@ export type CanonicalDocument = {
 
 export type ConsolidationInputPage = {
   url: string;
+  content?: string;
   preview: string;
   stylesheets?: string[];
   scripts?: string[];
@@ -50,7 +51,7 @@ export function buildCanonicalDocument(params: {
       id: `${jobId}-chapter-${index + 1}`,
       sourceUrl: page.url,
       title: `Chapter ${index + 1}`,
-      bodyHtml: page.preview,
+      bodyHtml: page.content ?? page.preview,
       assets: {
         stylesheets: page.stylesheets ?? [],
         scripts: page.scripts ?? []

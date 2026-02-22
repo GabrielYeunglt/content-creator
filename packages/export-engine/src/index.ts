@@ -25,12 +25,15 @@ export type ExportPipelineOptions = {
 export function renderCanonicalHtml(document: CanonicalDocument): string {
   const chapterHtml = document.chapters
     .map(
-      (chapter) => `
+      (chapter) => {
+        const body = renderChapterBody(chapter.bodyHtml);
+        return `
         <section data-source-url="${escapeHtml(chapter.sourceUrl)}">
           <h2>${escapeHtml(chapter.title)}</h2>
-          <article>${chapter.bodyHtml}</article>
+          <div class="chapter-body">${body}</div>
         </section>
       `
+      }
     )
     .join('\n');
 
@@ -44,7 +47,8 @@ export function renderCanonicalHtml(document: CanonicalDocument): string {
       body { font-family: Georgia, serif; margin: 40px auto; max-width: 860px; line-height: 1.55; padding: 0 16px; }
       h1 { border-bottom: 1px solid #ddd; padding-bottom: 12px; }
       section { margin: 28px 0; page-break-inside: avoid; }
-      article { margin-top: 12px; }
+      .chapter-body { margin-top: 12px; }
+      .chapter-body img { max-width: 100%; height: auto; display: block; }
       .meta { color: #666; font-size: 0.9rem; }
     </style>
   </head>
@@ -55,6 +59,19 @@ export function renderCanonicalHtml(document: CanonicalDocument): string {
     ${chapterHtml}
   </body>
 </html>`;
+}
+
+function renderChapterBody(bodyHtml: string): string {
+  const trimmed = bodyHtml.trim();
+  if (trimmed.startsWith('data:image/')) {
+    return `<img src="${trimmed}" alt="Chapter image" />`;
+  }
+
+  if (/^https?:\/\//i.test(trimmed) && /\.(png|jpe?g|webp|gif|bmp|svg)(\?.*)?$/i.test(trimmed)) {
+    return `<img src="${trimmed}" alt="Chapter image" />`;
+  }
+
+  return bodyHtml;
 }
 
 export function renderEpubLikeManifest(document: CanonicalDocument): string {

@@ -44,9 +44,10 @@ declare global {
 
     __CONTENT_CREATOR_DESKTOP_EXPORT__?: (request: {
       jobId: string;
-      format: 'html' | 'pdf' | 'epub' | 'epub-manifest' | 'all';
+      format: 'html' | 'pdf' | 'epub' | 'all';
       pages: Array<{
         url: string;
+        content?: string;
         preview: string;
         stylesheets?: string[];
         scripts?: string[];

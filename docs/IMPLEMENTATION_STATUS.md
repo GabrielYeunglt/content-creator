@@ -1,6 +1,7 @@
 # Content Creator — Implementation Plan & Current Status
 
 ## Goal
+
 Build a profile-driven desktop/web app that crawls website content from a start URL and exports consolidated output (PDF/EPUB), with settings and profile management in a single-page GUI.
 
 ---
@@ -8,17 +9,20 @@ Build a profile-driven desktop/web app that crawls website content from a start 
 ## Implementation Plan (Phased)
 
 ### Phase 0 — Bootstrap
+
 - Monorepo scaffold and workspace setup
 - SPA shell and navigation sections
 - Basic settings persistence/reset flow
 
 ### Phase 1 — Profiles MVP
+
 - Profile CRUD with domain + selector rules
 - CSS/XPath manual selector inputs
 - Selector test utility on sample HTML
 - Profile list-first UX + create/edit form split
 
 ### Phase 2 — Crawl/Extract MVP
+
 - Start Job flow with URL input + profile selection
 - Domain-based profile auto-match from start URL
 - Crawl runner loop with stop conditions:
@@ -30,12 +34,14 @@ Build a profile-driven desktop/web app that crawls website content from a start 
 - Result diagnostics persisted in job records
 
 ### Phase 3 — Consolidation & Export (next major build)
+
 - Canonical document model for all extracted pages
 - PDF generation pipeline
 - EPUB generation pipeline
 - Artifact persistence and download/open actions
 
 ### Phase 4 — Hardening
+
 - Better retry/backoff and error handling
 - Test fixtures and integration tests
 - Move fetch/extraction to desktop/backend runtime (avoid browser CORS limits)
@@ -47,16 +53,19 @@ Build a profile-driven desktop/web app that crawls website content from a start 
 ## ✅ Completed
 
 ### App shell + settings
+
 - SPA sections: Start Job, Profile Manager, Settings, Results
 - Settings read/write/reset implemented
 
 ### Profile management
+
 - Profiles can be created, edited, deleted
 - Profile Manager defaults to list view
 - Create/Edit uses dedicated child editor form
 - Selector test utility supports current form inputs
 
 ### Start Job UX
+
 - URL host is parsed and matched against profile domain
 - Matching profiles are filtered in dropdown
 - First matching profile is auto-selected
@@ -64,6 +73,7 @@ Build a profile-driven desktop/web app that crawls website content from a start 
 - Shortcut routes to Profile Manager create mode
 
 ### Crawl execution
+
 - Multi-page crawl loop is active
 - Stop conditions implemented:
   - visited URL loop
@@ -73,6 +83,7 @@ Build a profile-driven desktop/web app that crawls website content from a start 
 - Status transitions persisted: queued → running → completed/failed
 
 ### Results diagnostics
+
 - Results show status, stop reason, errors, pages processed, last visited URL
 - Per-page extracted records are stored and displayed (`url`, `preview`)
 - Per-page linked asset discovery for `link[rel="stylesheet"]` and `script[src]`
@@ -82,6 +93,7 @@ Build a profile-driven desktop/web app that crawls website content from a start 
 - Export MVP advanced: export-engine now includes runtime pipelines for HTML, PDF (Playwright), EPUB (epub-gen), and manifest artifacts
 - Results UI now tracks persisted exported artifact records when desktop/backend export bridge is available
 - Results UI now includes a reviewable per-job log timeline (info/warn/error) for crawl diagnostics
+- Export UX now emphasizes user-facing HTML/EPUB outputs; manifest JSON is no longer exposed as a primary user action
 - Start Job now surfaces runtime bridge readiness indicators (crawler/export) to make standalone-web limitations explicit before execution
 - Results panel now includes stop-reason troubleshooting guidance for common runtime failures (missing bridge, crawl runtime error, out-of-domain)
 - Crawler-engine hardening started: configurable retry/backoff per page with structured error records in crawl results
@@ -91,6 +103,7 @@ Build a profile-driven desktop/web app that crawls website content from a start 
 ---
 
 ## ⚠️ Known Limitation
+
 - Browser-only use (without running the desktop bridge service) still fails fast for crawl/export operations that require backend runtime capabilities.
 - PDF/EPUB export still depends on runtime packages (`playwright`, `epub-gen`) being installed in the bridge environment.
 
@@ -109,5 +122,6 @@ Build a profile-driven desktop/web app that crawls website content from a start 
 ---
 
 ## Milestone Snapshot
+
 - Current milestone: **V1 Step 9**
 - Practical state: **Backend crawl/export bridge service is now implemented for local/dev runtime; production desktop packaging and deeper end-to-end coverage remain**.
