@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { extractFieldFromHtml, extractNextUrlFromHtml } from '../lib/selectorEval';
 import {
+  createMetadataExtractionRule,
   type AttributeUrlMode,
   type ExtractMode,
   type MetadataFieldType,
@@ -20,69 +21,64 @@ export function ProfileEditorForm({ mode, draft, onChange, onSave, onCancel }: P
   const [sampleHtml, setSampleHtml] = useState('');
   const [testOutput, setTestOutput] = useState('');
 
+  function updateExtractionRule(ruleId: string, patch: Partial<ProfileDraft['extractionRules'][number]>) {
+    onChange(
+      'extractionRules',
+      draft.extractionRules.map((rule) => (rule.id === ruleId ? { ...rule, ...patch } : rule))
+    );
+  }
+
+  function addMetadataRule() {
+    onChange('extractionRules', [...draft.extractionRules, createMetadataExtractionRule()]);
+  }
+
+  function removeRule(ruleId: string) {
+    onChange(
+      'extractionRules',
+      draft.extractionRules.filter((rule) => rule.id !== ruleId)
+    );
+  }
+
   function handleRunSelectorTest() {
     if (!sampleHtml.trim()) {
       setTestOutput('Paste sample HTML to run selector test.');
       return;
     }
 
-    const contentResult = extractFieldFromHtml({
-      html: sampleHtml,
-      selectorType: draft.selectorType,
-      selector: draft.selector,
-      extractMode: draft.extractMode,
-      attributeName: draft.contentAttributeName
-    });
+    const lines = draft.extractionRules
+      .filter((rule) => rule.selector.trim())
+      .map((rule) => {
+        if (rule.type === 'pagination') {
+          const nextResult = extractNextUrlFromHtml({
+            html: sampleHtml,
+            selectorType: rule.selectorType,
+            selector: rule.selector,
+            attributeName: rule.attributeName
+          });
 
-    const nextResult = extractNextUrlFromHtml({
-      html: sampleHtml,
-      selectorType: draft.nextSelectorType,
-      selector: draft.nextSelector,
-      attributeName: draft.nextAttributeName
-    });
+          return nextResult.ok
+            ? `${rule.label}: ${nextResult.value || '[empty]'}`
+            : `${rule.label} error: ${nextResult.error}`;
+        }
 
-    const lines = [
-      contentResult.ok
-        ? `Content selector result: ${contentResult.value || '[empty]'}`
-        : `Content selector error: ${contentResult.error}`,
-      nextResult.ok
-        ? `Next selector result: ${nextResult.value || '[empty]'}`
-        : `Next selector error: ${nextResult.error}`
-    ];
+        const extracted = extractFieldFromHtml({
+          html: sampleHtml,
+          selectorType: rule.selectorType,
+          selector: rule.selector,
+          extractMode: rule.extractMode,
+          attributeName: rule.attributeName
+        });
 
+        return extracted.ok
+          ? `${rule.label}: ${extracted.value || '[empty]'}`
+          : `${rule.label} error: ${extracted.error}`;
+      });
 
-    setTestOutput(lines.join('\n'));
+    setTestOutput(lines.length ? lines.join('\n') : 'No selectors configured to test.');
   }
 
-  function addMetadataRule() {
-    onChange('metadataRules', [
-      ...draft.metadataRules,
-      {
-        id: crypto.randomUUID(),
-        fieldType: 'title',
-        customFieldName: '',
-        selectorType: 'css',
-        selector: '',
-        extractMode: 'text',
-        attributeName: 'href',
-        attributeUrlMode: 'value'
-      }
-    ]);
-  }
-
-  function updateMetadataRule(index: number, patch: Partial<ProfileDraft['metadataRules'][number]>) {
-    onChange(
-      'metadataRules',
-      draft.metadataRules.map((rule, ruleIndex) => (ruleIndex === index ? { ...rule, ...patch } : rule))
-    );
-  }
-
-  function removeMetadataRule(index: number) {
-    onChange(
-      'metadataRules',
-      draft.metadataRules.filter((_, ruleIndex) => ruleIndex !== index)
-    );
-  }
+  const autoVisibleRules = draft.extractionRules.filter((rule) => rule.showByDefault);
+  const addableRules = draft.extractionRules.filter((rule) => !rule.showByDefault);
 
   return (
     <section>
@@ -103,87 +99,127 @@ export function ProfileEditorForm({ mode, draft, onChange, onSave, onCancel }: P
           />
         </label>
 
+        {autoVisibleRules.map((rule) => (
+          <fieldset key={rule.id} style={{ border: '1px solid #ddd', padding: '0.75rem' }}>
+            <legend>{rule.label}</legend>
+            <div style={{ display: 'grid', gap: '0.5rem' }}>
+              {typeof rule.optional === 'boolean' && (
+                <label style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                  <input
+                    type="checkbox"
+                    checked={rule.optional}
+                    onChange={(event) => updateExtractionRule(rule.id, { optional: event.target.checked })}
+                  />
+                  Optional
+                </label>
+              )}
+
+              {rule.type === 'content' && (
+                <label>
+                  Field Name
+                  <input
+                    value={rule.fieldName ?? ''}
+                    onChange={(event) => updateExtractionRule(rule.id, { fieldName: event.target.value })}
+                    style={{ width: '100%' }}
+                  />
+                </label>
+              )}
+
+              <label>
+                Selector Type
+                <select
+                  value={rule.selectorType}
+                  onChange={(event) => updateExtractionRule(rule.id, { selectorType: event.target.value as SelectorType })}
+                >
+                  <option value="css">CSS</option>
+                  <option value="xpath">XPath</option>
+                </select>
+              </label>
+
+              <label>
+                Selector
+                <input
+                  value={rule.selector}
+                  onChange={(event) => updateExtractionRule(rule.id, { selector: event.target.value })}
+                  style={{ width: '100%' }}
+                />
+              </label>
+
+              {rule.type !== 'pagination' && (
+                <label>
+                  Extract Mode
+                  <select
+                    value={rule.extractMode}
+                    onChange={(event) => updateExtractionRule(rule.id, { extractMode: event.target.value as ExtractMode })}
+                  >
+                    <option value="text">Text</option>
+                    <option value="html">HTML</option>
+                    <option value="attribute">Attribute</option>
+                  </select>
+                </label>
+              )}
+
+              <label>
+                Attribute Name
+                <input
+                  value={rule.attributeName}
+                  onChange={(event) => updateExtractionRule(rule.id, { attributeName: event.target.value })}
+                  style={{ width: '100%' }}
+                />
+              </label>
+
+              {rule.type !== 'total-pages' && (
+                <label>
+                  Attribute URL Handling
+                  <select
+                    value={rule.attributeUrlMode}
+                    onChange={(event) => updateExtractionRule(rule.id, { attributeUrlMode: event.target.value as AttributeUrlMode })}
+                    disabled={rule.extractMode !== 'attribute'}
+                  >
+                    <option value="value">Keep URL/value</option>
+                    <option value="fetch-image-data-url">Fetch image and store as data URL</option>
+                  </select>
+                </label>
+              )}
+
+              {rule.type === 'content' && (
+                <label style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                  <input
+                    type="checkbox"
+                    checked={rule.required ?? true}
+                    onChange={(event) => updateExtractionRule(rule.id, { required: event.target.checked })}
+                  />
+                  Required
+                </label>
+              )}
+
+              {rule.type === 'pagination' && (
+                <label>
+                  Pagination Navigation
+                  <select
+                    value={rule.navigationMode ?? 'url-attribute'}
+                    onChange={(event) => updateExtractionRule(rule.id, { navigationMode: event.target.value as 'url-attribute' | 'click' })}
+                  >
+                    <option value="url-attribute">Extract next URL from attribute</option>
+                    <option value="click">Click next button (JS-driven)</option>
+                  </select>
+                </label>
+              )}
+            </div>
+          </fieldset>
+        ))}
+
         <fieldset style={{ border: '1px solid #ddd', padding: '0.75rem' }}>
-          <legend>Primary Content Selector</legend>
-          <div style={{ display: 'grid', gap: '0.5rem' }}>
-            <label>
-              Field Name
-              <input
-                value={draft.fieldName}
-                onChange={(event) => onChange('fieldName', event.target.value)}
-                style={{ width: '100%' }}
-              />
-            </label>
-
-            <label>
-              Selector Type
-              <select value={draft.selectorType} onChange={(event) => onChange('selectorType', event.target.value as SelectorType)}>
-                <option value="css">CSS</option>
-                <option value="xpath">XPath</option>
-              </select>
-            </label>
-
-            <label>
-              Selector
-              <input
-                value={draft.selector}
-                onChange={(event) => onChange('selector', event.target.value)}
-                style={{ width: '100%' }}
-              />
-            </label>
-
-            <label>
-              Extract Mode
-              <select value={draft.extractMode} onChange={(event) => onChange('extractMode', event.target.value as ExtractMode)}>
-                <option value="text">Text</option>
-                <option value="html">HTML</option>
-                <option value="attribute">Attribute</option>
-              </select>
-            </label>
-
-            <label>
-              Content Attribute (for attribute mode)
-              <input
-                value={draft.contentAttributeName}
-                onChange={(event) => onChange('contentAttributeName', event.target.value)}
-                style={{ width: '100%' }}
-              />
-            </label>
-
-            <label>
-              Attribute URL Handling
-              <select
-                value={draft.contentAttributeUrlMode}
-                onChange={(event) => onChange('contentAttributeUrlMode', event.target.value as AttributeUrlMode)}
-                disabled={draft.extractMode !== 'attribute'}
-              >
-                <option value="value">Keep URL/value</option>
-                <option value="fetch-image-data-url">Fetch image and store as data URL</option>
-              </select>
-            </label>
-
-            <label style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-              <input type="checkbox" checked={draft.required} onChange={(event) => onChange('required', event.target.checked)} />
-              Required
-            </label>
-          </div>
-        </fieldset>
-
-        <fieldset style={{ border: '1px solid #ddd', padding: '0.75rem' }}>
-          <legend>Optional Book Metadata Extractions</legend>
-          <p style={{ marginTop: 0 }}>
-            Add any optional fields (Title, Author, Chapter, Publisher, Series, Cover, etc.) that should flow into EPUB metadata
-            and HTML header details.
-          </p>
+          <legend>Optional Extraction Rules</legend>
           <div style={{ display: 'grid', gap: '0.75rem' }}>
-            {draft.metadataRules.map((rule, index) => (
-              <div key={rule.id || `${index}`} style={{ border: '1px solid #eee', padding: '0.5rem' }}>
+            {addableRules.map((rule) => (
+              <div key={rule.id} style={{ border: '1px solid #eee', padding: '0.5rem' }}>
                 <div style={{ display: 'grid', gap: '0.5rem' }}>
                   <label>
                     Field Type
                     <select
                       value={rule.fieldType}
-                      onChange={(event) => updateMetadataRule(index, { fieldType: event.target.value as MetadataFieldType })}
+                      onChange={(event) => updateExtractionRule(rule.id, { fieldType: event.target.value as MetadataFieldType })}
                     >
                       <option value="title">Title</option>
                       <option value="author">Author</option>
@@ -202,7 +238,7 @@ export function ProfileEditorForm({ mode, draft, onChange, onSave, onCancel }: P
                       Custom Field Name
                       <input
                         value={rule.customFieldName}
-                        onChange={(event) => updateMetadataRule(index, { customFieldName: event.target.value })}
+                        onChange={(event) => updateExtractionRule(rule.id, { customFieldName: event.target.value })}
                         style={{ width: '100%' }}
                       />
                     </label>
@@ -212,7 +248,7 @@ export function ProfileEditorForm({ mode, draft, onChange, onSave, onCancel }: P
                     Selector Type
                     <select
                       value={rule.selectorType}
-                      onChange={(event) => updateMetadataRule(index, { selectorType: event.target.value as SelectorType })}
+                      onChange={(event) => updateExtractionRule(rule.id, { selectorType: event.target.value as SelectorType })}
                     >
                       <option value="css">CSS</option>
                       <option value="xpath">XPath</option>
@@ -223,7 +259,7 @@ export function ProfileEditorForm({ mode, draft, onChange, onSave, onCancel }: P
                     Selector
                     <input
                       value={rule.selector}
-                      onChange={(event) => updateMetadataRule(index, { selector: event.target.value })}
+                      onChange={(event) => updateExtractionRule(rule.id, { selector: event.target.value })}
                       style={{ width: '100%' }}
                     />
                   </label>
@@ -232,7 +268,7 @@ export function ProfileEditorForm({ mode, draft, onChange, onSave, onCancel }: P
                     Extract Mode
                     <select
                       value={rule.extractMode}
-                      onChange={(event) => updateMetadataRule(index, { extractMode: event.target.value as ExtractMode })}
+                      onChange={(event) => updateExtractionRule(rule.id, { extractMode: event.target.value as ExtractMode })}
                     >
                       <option value="text">Text</option>
                       <option value="html">HTML</option>
@@ -241,10 +277,10 @@ export function ProfileEditorForm({ mode, draft, onChange, onSave, onCancel }: P
                   </label>
 
                   <label>
-                    Attribute Name (for attribute mode)
+                    Attribute Name
                     <input
                       value={rule.attributeName}
-                      onChange={(event) => updateMetadataRule(index, { attributeName: event.target.value })}
+                      onChange={(event) => updateExtractionRule(rule.id, { attributeName: event.target.value })}
                       style={{ width: '100%' }}
                     />
                   </label>
@@ -253,7 +289,7 @@ export function ProfileEditorForm({ mode, draft, onChange, onSave, onCancel }: P
                     Attribute URL Handling
                     <select
                       value={rule.attributeUrlMode}
-                      onChange={(event) => updateMetadataRule(index, { attributeUrlMode: event.target.value as AttributeUrlMode })}
+                      onChange={(event) => updateExtractionRule(rule.id, { attributeUrlMode: event.target.value as AttributeUrlMode })}
                       disabled={rule.extractMode !== 'attribute'}
                     >
                       <option value="value">Keep URL/value</option>
@@ -262,8 +298,8 @@ export function ProfileEditorForm({ mode, draft, onChange, onSave, onCancel }: P
                   </label>
 
                   <div>
-                    <button type="button" onClick={() => removeMetadataRule(index)}>
-                      Remove Metadata Rule
+                    <button type="button" onClick={() => removeRule(rule.id)}>
+                      Remove Extraction Rule
                     </button>
                   </div>
                 </div>
@@ -272,52 +308,15 @@ export function ProfileEditorForm({ mode, draft, onChange, onSave, onCancel }: P
 
             <div>
               <button type="button" onClick={addMetadataRule}>
-                Add Metadata Extraction
+                Add Extraction Rule
               </button>
             </div>
           </div>
         </fieldset>
 
         <fieldset style={{ border: '1px solid #ddd', padding: '0.75rem' }}>
-          <legend>Pagination Rule (Next Button)</legend>
+          <legend>Crawl Limits</legend>
           <div style={{ display: 'grid', gap: '0.5rem' }}>
-            <label>
-              Selector Type
-              <select
-                value={draft.nextSelectorType}
-                onChange={(event) => onChange('nextSelectorType', event.target.value as SelectorType)}
-              >
-                <option value="css">CSS</option>
-                <option value="xpath">XPath</option>
-              </select>
-            </label>
-            <label>
-              Next Selector
-              <input
-                value={draft.nextSelector}
-                onChange={(event) => onChange('nextSelector', event.target.value)}
-                style={{ width: '100%' }}
-              />
-            </label>
-            <label>
-              Next Link Attribute
-              <input
-                value={draft.nextAttributeName}
-                onChange={(event) => onChange('nextAttributeName', event.target.value)}
-                style={{ width: '100%' }}
-              />
-            </label>
-            <label>
-              Pagination Navigation
-              <select
-                value={draft.nextNavigationMode}
-                onChange={(event) => onChange('nextNavigationMode', event.target.value as 'url-attribute' | 'click')}
-              >
-                <option value="url-attribute">Extract next URL from attribute</option>
-                <option value="click">Click next button (JS-driven)</option>
-              </select>
-            </label>
-
             <label>
               Max Pages
               <input
@@ -325,45 +324,6 @@ export function ProfileEditorForm({ mode, draft, onChange, onSave, onCancel }: P
                 min={1}
                 value={draft.maxPages}
                 onChange={(event) => onChange('maxPages', Number.parseInt(event.target.value, 10) || 1)}
-              />
-            </label>
-          </div>
-        </fieldset>
-
-
-
-        <fieldset style={{ border: '1px solid #ddd', padding: '0.75rem' }}>
-          <legend>Optional Total Pages Rule</legend>
-          <p style={{ marginTop: 0 }}>
-            If configured and extracted successfully, crawling stops when processed page count reaches this value.
-          </p>
-          <div style={{ display: 'grid', gap: '0.5rem' }}>
-            <label>
-              Selector Type
-              <select
-                value={draft.totalPagesSelectorType}
-                onChange={(event) => onChange('totalPagesSelectorType', event.target.value as SelectorType)}
-              >
-                <option value="css">CSS</option>
-                <option value="xpath">XPath</option>
-              </select>
-            </label>
-            <label>
-              Total Pages Selector (optional)
-              <input
-                value={draft.totalPagesSelector}
-                onChange={(event) => onChange('totalPagesSelector', event.target.value)}
-                style={{ width: '100%' }}
-                placeholder=".page-count"
-              />
-            </label>
-            <label>
-              Total Pages Attribute (optional)
-              <input
-                value={draft.totalPagesAttributeName}
-                onChange={(event) => onChange('totalPagesAttributeName', event.target.value)}
-                style={{ width: '100%' }}
-                placeholder="leave empty to use textContent"
               />
             </label>
           </div>
@@ -381,7 +341,7 @@ export function ProfileEditorForm({ mode, draft, onChange, onSave, onCancel }: P
 
       <fieldset style={{ border: '1px solid #ddd', padding: '0.75rem', marginBottom: '1rem' }}>
         <legend>Selector Test (sample HTML)</legend>
-        <p style={{ marginTop: 0 }}>Paste sample page HTML to quickly test current selector inputs.</p>
+        <p style={{ marginTop: 0 }}>Paste sample page HTML to test all configured extraction rules.</p>
         <textarea
           value={sampleHtml}
           onChange={(event) => setSampleHtml(event.target.value)}
