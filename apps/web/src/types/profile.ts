@@ -34,6 +34,13 @@ export type PaginationRule = {
   selectorType: SelectorType;
   selector: string;
   attributeName: string;
+  navigationMode?: 'url-attribute' | 'click';
+};
+
+export type TotalPagesRule = {
+  selectorType: SelectorType;
+  selector: string;
+  attributeName?: string;
 };
 
 export type WebsiteProfile = {
@@ -52,6 +59,7 @@ export type WebsiteProfile = {
     attributeUrlMode?: AttributeUrlMode;
   }>;
   paginationRule: PaginationRule;
+  totalPagesRule?: TotalPagesRule;
   stopRules: StopRules;
   createdAt: string;
   updatedAt: string;

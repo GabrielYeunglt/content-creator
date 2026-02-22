@@ -3,7 +3,8 @@ export type CrawlStopReason =
   | 'already-visited-url'
   | 'max-pages-reached'
   | 'error-threshold-reached'
-  | 'out-of-domain-blocked';
+  | 'out-of-domain-blocked'
+  | 'total-pages-reached';
 
 export type SelectorType = 'css' | 'xpath';
 export type ExtractMode = 'text' | 'html' | 'attribute';
@@ -31,6 +32,12 @@ export type CrawlPaginationRule = {
   selector: string;
   attributeName: string;
   navigationMode?: 'url-attribute' | 'click';
+};
+
+export type CrawlTotalPagesRule = {
+  selectorType: SelectorType;
+  selector: string;
+  attributeName?: string;
 };
 
 export type CrawlStopRules = {
@@ -61,6 +68,7 @@ export type VirtualBrowserCrawlOptions = {
   };
   interactionSteps?: CrawlInteractionStep[];
   metadataRules?: CrawlMetadataRule[];
+  totalPagesRule?: CrawlTotalPagesRule;
 };
 
 export type CrawledPage = {
@@ -82,6 +90,7 @@ export type CrawlResult = {
   stopReason: CrawlStopReason;
   pages: CrawledPage[];
   errors: CrawlErrorRecord[];
+  notes: string[];
 };
 
 type RequestLike = {
@@ -182,10 +191,6 @@ async function resolveNextUrl(params: {
     return resolvedFromAttribute;
   }
 
-  if (paginationRule.navigationMode !== 'click' && nextValue.trim()) {
-    return null;
-  }
-
   const beforeClickUrl = await page.evaluate(() => window.location.href);
   const nextSelector = toCssSelector(paginationRule.selectorType, paginationRule.selector);
   await page.waitForSelector(nextSelector, { timeout: timeoutMs });
@@ -198,6 +203,39 @@ async function resolveNextUrl(params: {
   }
 
   return toAbsoluteUrl(currentUrl, afterClickUrl);
+}
+
+
+
+async function extractTotalPages(page: PlaywrightPageLike, rule: CrawlTotalPagesRule): Promise<number | null> {
+  const rawValue = await page.evaluate(
+    ({ selectorType, selector, attributeName }) => {
+      const firstNode = selectorType === 'css'
+        ? document.querySelector(selector)
+        : document.evaluate(selector, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+
+      if (!firstNode || !(firstNode instanceof Element)) return '';
+
+      if (attributeName?.trim()) {
+        return firstNode.getAttribute(attributeName)?.trim() ?? '';
+      }
+
+      return (firstNode.textContent ?? '').trim();
+    },
+    rule
+  );
+
+  const matched = rawValue.match(/\d+/);
+  if (!matched) {
+    return null;
+  }
+
+  const parsed = Number.parseInt(matched[0], 10);
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    return null;
+  }
+
+  return parsed;
 }
 
 function toCssSelector(selectorType: SelectorType, selector: string): string {
@@ -219,14 +257,17 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
     timeoutMs = 30000,
     contentReadySelector,
     interactionSteps = [],
-    metadataRules = []
+    metadataRules = [],
+    totalPagesRule
   } = options;
 
   const visited = new Set<string>();
   const pages: CrawledPage[] = [];
   const errors: CrawlErrorRecord[] = [];
+  const notes: string[] = [];
 
   let currentUrl: string | null = startUrl;
+  let totalPagesTarget: number | null = null;
   let consecutiveErrors = 0;
 
   const maxRetriesPerPage = Math.max(0, stopRules.maxRetriesPerPage ?? 1);
@@ -239,16 +280,16 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
   try {
     while (currentUrl) {
       if (visited.has(currentUrl)) {
-        return { pagesProcessed: pages.length, stopReason: 'already-visited-url', pages, errors };
+        return { pagesProcessed: pages.length, stopReason: 'already-visited-url', pages, errors, notes };
       }
 
       if (pages.length >= Math.max(1, stopRules.maxPages)) {
-        return { pagesProcessed: pages.length, stopReason: 'max-pages-reached', pages, errors };
+        return { pagesProcessed: pages.length, stopReason: 'max-pages-reached', pages, errors, notes };
       }
 
       const host = normalizedHost(currentUrl);
       if (!host || host !== domain.replace(/^www\./, '').toLowerCase()) {
-        return { pagesProcessed: pages.length, stopReason: 'out-of-domain-blocked', pages, errors };
+        return { pagesProcessed: pages.length, stopReason: 'out-of-domain-blocked', pages, errors, notes };
       }
 
       const networkStylesheets = new Set<string>();
@@ -386,6 +427,20 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
         });
 
         consecutiveErrors = 0;
+
+        if (totalPagesRule && totalPagesTarget === null) {
+          const extractedTotalPages = await extractTotalPages(page, totalPagesRule);
+          if (extractedTotalPages !== null) {
+            totalPagesTarget = extractedTotalPages;
+            notes.push(`Total pages target extracted: ${extractedTotalPages}.`);
+          }
+        }
+
+        if (totalPagesTarget !== null && pages.length >= totalPagesTarget) {
+          notes.push(`Reached extracted total pages target (${totalPagesTarget}).`);
+          return { pagesProcessed: pages.length, stopReason: 'total-pages-reached', pages, errors, notes };
+        }
+
         const resolvedNext = await resolveNextUrl({
           page,
           currentUrl,
@@ -393,7 +448,7 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
           timeoutMs
         });
         if (!resolvedNext) {
-          return { pagesProcessed: pages.length, stopReason: 'no-next-button', pages, errors };
+          return { pagesProcessed: pages.length, stopReason: 'no-next-button', pages, errors, notes };
         }
 
         currentUrl = resolvedNext;
@@ -403,14 +458,14 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
         errors.push({ url: currentUrl, attempt: maxRetriesPerPage + 1, error: message });
 
         if (consecutiveErrors >= Math.max(1, stopRules.maxConsecutiveErrors)) {
-          return { pagesProcessed: pages.length, stopReason: 'error-threshold-reached', pages, errors };
+          return { pagesProcessed: pages.length, stopReason: 'error-threshold-reached', pages, errors, notes };
         }
       } finally {
         page.off('requestfinished', requestHandler);
       }
     }
 
-    return { pagesProcessed: pages.length, stopReason: 'no-next-button', pages, errors };
+    return { pagesProcessed: pages.length, stopReason: 'no-next-button', pages, errors, notes };
   } finally {
     await context.close();
     await browser.close();
