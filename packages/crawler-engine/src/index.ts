@@ -30,6 +30,7 @@ export type CrawlPaginationRule = {
   selectorType: SelectorType;
   selector: string;
   attributeName: string;
+  navigationMode?: 'url-attribute' | 'click';
 };
 
 export type CrawlStopRules = {
@@ -146,10 +147,57 @@ function toAbsoluteUrl(baseUrl: string, value: string): string | null {
   }
 
   try {
-    return new URL(value, baseUrl).toString();
+    const resolved = new URL(value, baseUrl);
+    if (resolved.protocol !== 'http:' && resolved.protocol !== 'https:') {
+      return null;
+    }
+    return resolved.toString();
   } catch {
     return null;
   }
+}
+
+async function resolveNextUrl(params: {
+  page: PlaywrightPageLike;
+  currentUrl: string;
+  paginationRule: CrawlPaginationRule;
+  timeoutMs: number;
+}): Promise<string | null> {
+  const { page, currentUrl, paginationRule, timeoutMs } = params;
+
+  const nextValue = await page.evaluate(
+    ({ selectorType, selector, attributeName }) => {
+      const firstNode = selectorType === 'css'
+        ? document.querySelector(selector)
+        : document.evaluate(selector, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+
+      if (!firstNode || !(firstNode instanceof Element)) return '';
+      return firstNode.getAttribute(attributeName)?.trim() ?? '';
+    },
+    paginationRule
+  );
+
+  const resolvedFromAttribute = toAbsoluteUrl(currentUrl, nextValue);
+  if (resolvedFromAttribute) {
+    return resolvedFromAttribute;
+  }
+
+  if (paginationRule.navigationMode !== 'click' && nextValue.trim()) {
+    return null;
+  }
+
+  const beforeClickUrl = await page.evaluate(() => window.location.href);
+  const nextSelector = toCssSelector(paginationRule.selectorType, paginationRule.selector);
+  await page.waitForSelector(nextSelector, { timeout: timeoutMs });
+  await page.click(nextSelector, { timeout: timeoutMs });
+  await page.waitForTimeout(400);
+  const afterClickUrl = await page.evaluate(() => window.location.href);
+
+  if (afterClickUrl === beforeClickUrl) {
+    return null;
+  }
+
+  return toAbsoluteUrl(currentUrl, afterClickUrl);
 }
 
 function toCssSelector(selectorType: SelectorType, selector: string): string {
@@ -307,18 +355,6 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
           }
         }
 
-        const nextValue = await page.evaluate(
-          ({ selectorType, selector, attributeName }) => {
-            const firstNode = selectorType === 'css'
-              ? document.querySelector(selector)
-              : document.evaluate(selector, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
-
-            if (!firstNode || !(firstNode instanceof Element)) return '';
-            return firstNode.getAttribute(attributeName)?.trim() ?? '';
-          },
-          paginationRule
-        );
-
         const domAssets = await page.evaluate(() => {
           const stylesheets = Array.from(document.querySelectorAll('link[rel="stylesheet"][href]'))
             .map((node) => node.getAttribute('href') ?? '')
@@ -350,7 +386,12 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
         });
 
         consecutiveErrors = 0;
-        const resolvedNext = toAbsoluteUrl(currentUrl, nextValue);
+        const resolvedNext = await resolveNextUrl({
+          page,
+          currentUrl,
+          paginationRule,
+          timeoutMs
+        });
         if (!resolvedNext) {
           return { pagesProcessed: pages.length, stopReason: 'no-next-button', pages, errors };
         }
