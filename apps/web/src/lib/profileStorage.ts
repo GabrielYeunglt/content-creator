@@ -1,5 +1,6 @@
 import {
-  defaultProfileDraft,
+  createDefaultExtractionRules,
+  createDefaultProfileDraft,
   type ProfileDraft,
   type SelectorType,
   type WebsiteProfile
@@ -29,7 +30,7 @@ function sanitizeProfile(candidate: Partial<WebsiteProfile>): WebsiteProfile | n
     .filter((rule) => rule.selector.trim().length > 0)
     .map((rule) => ({
       ...rule,
-      attributeUrlMode: rule.attributeUrlMode ?? defaultProfileDraft.contentAttributeUrlMode
+      attributeUrlMode: rule.attributeUrlMode ?? 'value'
     }));
   if (selectorRules.length === 0) {
     return null;
@@ -45,7 +46,7 @@ function sanitizeProfile(candidate: Partial<WebsiteProfile>): WebsiteProfile | n
       .map((rule) => ({
         ...rule,
         customFieldName: rule.customFieldName?.trim() || '',
-        attributeUrlMode: rule.attributeUrlMode ?? defaultProfileDraft.contentAttributeUrlMode
+        attributeUrlMode: rule.attributeUrlMode ?? 'value'
       })),
     paginationRule: {
       selectorType: validSelectorType(candidate.paginationRule.selectorType)
@@ -67,7 +68,7 @@ function sanitizeProfile(candidate: Partial<WebsiteProfile>): WebsiteProfile | n
     stopRules: {
       stopWhenNoNextButton: Boolean(candidate.stopRules.stopWhenNoNextButton),
       stopWhenUrlVisited: Boolean(candidate.stopRules.stopWhenUrlVisited),
-      maxPages: Math.max(1, Number(candidate.stopRules.maxPages) || defaultProfileDraft.maxPages)
+      maxPages: Math.max(1, Number(candidate.stopRules.maxPages) || createDefaultProfileDraft().maxPages)
     },
     createdAt: candidate.createdAt ?? new Date().toISOString(),
     updatedAt: candidate.updatedAt ?? new Date().toISOString()
@@ -82,39 +83,44 @@ function validateProfileDraft(draft: ProfileDraft): { ok: true } | { ok: false; 
   if (!domain || !domain.includes('.')) {
     return { ok: false, error: 'A valid domain is required (example.com).' };
   }
-  if (!draft.selector.trim()) {
-    return { ok: false, error: 'Primary selector is required.' };
-  }
-  if (!draft.nextSelector.trim()) {
-    return { ok: false, error: 'Next-page selector is required.' };
+
+  const invalidRequiredRule = draft.extractionRules.find(
+    (rule) => rule.showByDefault && !rule.optional && !rule.selector.trim()
+  );
+  if (invalidRequiredRule) {
+    return { ok: false, error: `${invalidRequiredRule.label} selector is required.` };
   }
 
   return { ok: true };
 }
 
 function buildProfile(draft: ProfileDraft, id: string, createdAt: string): WebsiteProfile {
+  const contentRule = draft.extractionRules.find((rule) => rule.type === 'content');
+  const paginationRule = draft.extractionRules.find((rule) => rule.type === 'pagination');
+  const totalPagesRule = draft.extractionRules.find((rule) => rule.type === 'total-pages');
+
   return {
     id,
     name: draft.name.trim(),
     domain: normalizeDomain(draft.domain),
-    selectorRules: [
-      {
+    selectorRules: contentRule
+      ? [{
         id: crypto.randomUUID(),
-        fieldName: draft.fieldName.trim() || 'body',
-        selectorType: draft.selectorType,
-        selector: draft.selector.trim(),
-        extractMode: draft.extractMode,
-        attributeName: draft.contentAttributeName.trim() || 'href',
-        attributeUrlMode: draft.contentAttributeUrlMode,
-        required: draft.required
-      }
-    ],
-    metadataRules: draft.metadataRules
-      .filter((rule) => rule.selector.trim().length > 0)
+        fieldName: contentRule.fieldName?.trim() || 'body',
+        selectorType: contentRule.selectorType,
+        selector: contentRule.selector.trim(),
+        extractMode: contentRule.extractMode,
+        attributeName: contentRule.attributeName.trim() || 'href',
+        attributeUrlMode: contentRule.attributeUrlMode,
+        required: contentRule.required ?? true
+      }]
+      : [],
+    metadataRules: draft.extractionRules
+      .filter((rule) => rule.type === 'metadata' && rule.selector.trim().length > 0)
       .map((rule) => ({
         id: rule.id || crypto.randomUUID(),
-        fieldType: rule.fieldType,
-        customFieldName: rule.customFieldName.trim(),
+        fieldType: rule.fieldType ?? 'title',
+        customFieldName: rule.customFieldName?.trim() ?? '',
         selectorType: rule.selectorType,
         selector: rule.selector.trim(),
         extractMode: rule.extractMode,
@@ -122,16 +128,16 @@ function buildProfile(draft: ProfileDraft, id: string, createdAt: string): Websi
         attributeUrlMode: rule.attributeUrlMode
       })),
     paginationRule: {
-      selectorType: draft.nextSelectorType,
-      selector: draft.nextSelector.trim(),
-      attributeName: draft.nextAttributeName.trim() || 'href',
-      navigationMode: draft.nextNavigationMode
+      selectorType: paginationRule?.selectorType ?? 'css',
+      selector: paginationRule?.selector.trim() ?? '',
+      attributeName: paginationRule?.attributeName.trim() || 'href',
+      navigationMode: paginationRule?.navigationMode ?? 'url-attribute'
     },
-    totalPagesRule: draft.totalPagesSelector.trim()
+    totalPagesRule: totalPagesRule?.selector.trim()
       ? {
-        selectorType: draft.totalPagesSelectorType,
-        selector: draft.totalPagesSelector.trim(),
-        attributeName: draft.totalPagesAttributeName.trim() || undefined
+        selectorType: totalPagesRule.selectorType,
+        selector: totalPagesRule.selector.trim(),
+        attributeName: totalPagesRule.attributeName.trim() || undefined
       }
       : undefined,
     stopRules: {
@@ -165,34 +171,51 @@ export function writeProfiles(profiles: WebsiteProfile[]): void {
 }
 
 export function profileToDraft(profile: WebsiteProfile): ProfileDraft {
+  const [defaultContent, defaultPagination, defaultTotalPages] = createDefaultExtractionRules();
   const primary = profile.selectorRules[0];
+
   return {
     name: profile.name,
     domain: profile.domain,
-    fieldName: primary?.fieldName ?? defaultProfileDraft.fieldName,
-    selectorType: primary?.selectorType ?? defaultProfileDraft.selectorType,
-    selector: primary?.selector ?? defaultProfileDraft.selector,
-    extractMode: primary?.extractMode ?? defaultProfileDraft.extractMode,
-    required: primary?.required ?? defaultProfileDraft.required,
-    contentAttributeName: primary?.attributeName ?? defaultProfileDraft.contentAttributeName,
-    contentAttributeUrlMode: primary?.attributeUrlMode ?? defaultProfileDraft.contentAttributeUrlMode,
-    metadataRules: (profile.metadataRules ?? []).map((rule) => ({
-      id: rule.id,
-      fieldType: rule.fieldType,
-      customFieldName: rule.customFieldName ?? '',
-      selectorType: rule.selectorType,
-      selector: rule.selector,
-      extractMode: rule.extractMode,
-      attributeName: rule.attributeName ?? 'href',
-      attributeUrlMode: rule.attributeUrlMode ?? defaultProfileDraft.contentAttributeUrlMode
-    })),
-    nextSelectorType: profile.paginationRule.selectorType,
-    nextSelector: profile.paginationRule.selector,
-    nextAttributeName: profile.paginationRule.attributeName,
-    nextNavigationMode: profile.paginationRule.navigationMode ?? 'url-attribute',
-    totalPagesSelectorType: profile.totalPagesRule?.selectorType ?? defaultProfileDraft.totalPagesSelectorType,
-    totalPagesSelector: profile.totalPagesRule?.selector ?? defaultProfileDraft.totalPagesSelector,
-    totalPagesAttributeName: profile.totalPagesRule?.attributeName ?? defaultProfileDraft.totalPagesAttributeName,
+    extractionRules: [
+      {
+        ...defaultContent,
+        fieldName: primary?.fieldName ?? defaultContent.fieldName,
+        selectorType: primary?.selectorType ?? defaultContent.selectorType,
+        selector: primary?.selector ?? defaultContent.selector,
+        extractMode: primary?.extractMode ?? defaultContent.extractMode,
+        required: primary?.required ?? defaultContent.required,
+        attributeName: primary?.attributeName ?? defaultContent.attributeName,
+        attributeUrlMode: primary?.attributeUrlMode ?? defaultContent.attributeUrlMode
+      },
+      ...(profile.metadataRules ?? []).map((rule) => ({
+        id: rule.id,
+        type: 'metadata' as const,
+        label: 'Metadata Extraction',
+        showByDefault: false,
+        optional: true,
+        selectorType: rule.selectorType,
+        selector: rule.selector,
+        extractMode: rule.extractMode,
+        attributeName: rule.attributeName ?? 'href',
+        attributeUrlMode: rule.attributeUrlMode ?? 'value',
+        fieldType: rule.fieldType,
+        customFieldName: rule.customFieldName ?? ''
+      })),
+      {
+        ...defaultPagination,
+        selectorType: profile.paginationRule.selectorType,
+        selector: profile.paginationRule.selector,
+        attributeName: profile.paginationRule.attributeName,
+        navigationMode: profile.paginationRule.navigationMode ?? 'url-attribute'
+      },
+      {
+        ...defaultTotalPages,
+        selectorType: profile.totalPagesRule?.selectorType ?? defaultTotalPages.selectorType,
+        selector: profile.totalPagesRule?.selector ?? defaultTotalPages.selector,
+        attributeName: profile.totalPagesRule?.attributeName ?? defaultTotalPages.attributeName
+      }
+    ],
     maxPages: profile.stopRules.maxPages
   };
 }

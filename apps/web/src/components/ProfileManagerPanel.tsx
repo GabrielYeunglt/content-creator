@@ -8,7 +8,7 @@ import {
   readProfiles,
   writeProfiles
 } from '../lib/profileStorage';
-import { defaultProfileDraft, type ProfileDraft, type WebsiteProfile } from '../types/profile';
+import { createDefaultProfileDraft, type ProfileDraft, type WebsiteProfile } from '../types/profile';
 
 type ProfileManagerPanelProps = {
   onProfilesChanged: (profiles: WebsiteProfile[]) => void;
@@ -23,7 +23,7 @@ type ProfileManagerView =
 export function ProfileManagerPanel({ onProfilesChanged, createProfileRequestNonce }: ProfileManagerPanelProps) {
   const initialProfiles = useMemo(() => readProfiles(), []);
   const [profiles, setProfiles] = useState(initialProfiles);
-  const [draft, setDraft] = useState<ProfileDraft>(defaultProfileDraft);
+  const [draft, setDraft] = useState<ProfileDraft>(createDefaultProfileDraft());
   const [view, setView] = useState<ProfileManagerView>({ mode: 'list' });
   const [message, setMessage] = useState('');
 
@@ -32,7 +32,7 @@ export function ProfileManagerPanel({ onProfilesChanged, createProfileRequestNon
       return;
     }
 
-    setDraft(defaultProfileDraft);
+    setDraft(createDefaultProfileDraft());
     setView({ mode: 'create' });
     setMessage('Create a new profile for the selected domain.');
   }, [createProfileRequestNonce]);
@@ -49,7 +49,7 @@ export function ProfileManagerPanel({ onProfilesChanged, createProfileRequestNon
   }
 
   function handleCreateNew() {
-    setDraft(defaultProfileDraft);
+    setDraft(createDefaultProfileDraft());
     setView({ mode: 'create' });
     setMessage('');
   }
@@ -73,7 +73,7 @@ export function ProfileManagerPanel({ onProfilesChanged, createProfileRequestNon
 
     if (view.mode === 'edit' && view.profileId === profileId) {
       setView({ mode: 'list' });
-      setDraft(defaultProfileDraft);
+      setDraft(createDefaultProfileDraft());
     }
   }
 
@@ -85,7 +85,7 @@ export function ProfileManagerPanel({ onProfilesChanged, createProfileRequestNon
     }
 
     persistProfiles([...profiles, result.profile]);
-    setDraft(defaultProfileDraft);
+    setDraft(createDefaultProfileDraft());
     setView({ mode: 'list' });
     setMessage('Profile created.');
   }
@@ -105,14 +105,14 @@ export function ProfileManagerPanel({ onProfilesChanged, createProfileRequestNon
 
     const updated = profiles.map((profile) => (profile.id === profileId ? result.profile : profile));
     persistProfiles(updated);
-    setDraft(defaultProfileDraft);
+    setDraft(createDefaultProfileDraft());
     setView({ mode: 'list' });
     setMessage('Profile updated.');
   }
 
   function handleBackToList() {
     setView({ mode: 'list' });
-    setDraft(defaultProfileDraft);
+    setDraft(createDefaultProfileDraft());
     setMessage('');
   }
 
