@@ -10,6 +10,7 @@ declare global {
         selector: string;
         extractMode: 'text' | 'html' | 'attribute';
         attributeName?: string;
+        attributeUrlMode?: 'value' | 'fetch-image-data-url';
       };
       paginationRule: {
         selectorType: 'css' | 'xpath';

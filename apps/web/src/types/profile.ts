@@ -1,6 +1,7 @@
 export type SelectorType = 'css' | 'xpath';
 
 export type ExtractMode = 'text' | 'html' | 'attribute';
+export type AttributeUrlMode = 'value' | 'fetch-image-data-url';
 
 export type SelectorRule = {
   id: string;
@@ -9,6 +10,7 @@ export type SelectorRule = {
   selector: string;
   extractMode: ExtractMode;
   attributeName?: string;
+  attributeUrlMode?: AttributeUrlMode;
   required: boolean;
 };
 
@@ -53,6 +55,7 @@ export const defaultProfileDraft = {
   extractMode: defaultSelectorRule.extractMode,
   required: defaultSelectorRule.required,
   contentAttributeName: 'href',
+  contentAttributeUrlMode: 'value' as AttributeUrlMode,
   nextSelectorType: 'css' as SelectorType,
   nextSelector: '',
   nextAttributeName: 'href',

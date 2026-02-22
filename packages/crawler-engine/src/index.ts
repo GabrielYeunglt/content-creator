@@ -13,6 +13,7 @@ export type CrawlSelectorRule = {
   selector: string;
   extractMode: ExtractMode;
   attributeName?: string;
+  attributeUrlMode?: 'value' | 'fetch-image-data-url';
 };
 
 export type CrawlPaginationRule = {
@@ -79,7 +80,7 @@ type PlaywrightPageLike = {
   goto: (url: string, opts: { waitUntil: 'networkidle'; timeout: number }) => Promise<void>;
   on: (event: 'requestfinished', handler: (request: RequestLike) => void) => void;
   off: (event: 'requestfinished', handler: (request: RequestLike) => void) => void;
-  evaluate: <TResult, TArg = undefined>(fn: (arg: TArg) => TResult, arg?: TArg) => Promise<TResult>;
+  evaluate: <TResult, TArg = undefined>(fn: (arg: TArg) => TResult | Promise<TResult>, arg?: TArg) => Promise<TResult>;
   waitForSelector: (selector: string, opts: { timeout: number }) => Promise<unknown>;
   click: (selector: string, opts: { timeout: number }) => Promise<void>;
   waitForTimeout: (timeout: number) => Promise<void>;
@@ -225,7 +226,7 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
           }
         }
 
-        const content = await page.evaluate(
+        const extractedValue = await page.evaluate(
           ({ selectorType, selector, extractMode, attributeName }) => {
             const firstNode = selectorType === 'css'
               ? document.querySelector(selector)
@@ -239,6 +240,14 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
           },
           contentRule
         );
+
+        const content = await resolveContentValue({
+          page,
+          baseUrl: currentUrl,
+          contentRule,
+          extractedValue,
+          timeoutMs
+        });
 
         const nextValue = await page.evaluate(
           ({ selectorType, selector, attributeName }) => {
@@ -305,5 +314,65 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
   } finally {
     await context.close();
     await browser.close();
+  }
+}
+
+async function resolveContentValue(params: {
+  page: PlaywrightPageLike;
+  baseUrl: string;
+  contentRule: CrawlSelectorRule;
+  extractedValue: string | null;
+  timeoutMs: number;
+}): Promise<string> {
+  const { page, baseUrl, contentRule, extractedValue, timeoutMs } = params;
+  const raw = extractedValue ?? '';
+
+  if (contentRule.extractMode !== 'attribute') {
+    return raw;
+  }
+
+  if (contentRule.attributeUrlMode !== 'fetch-image-data-url') {
+    return raw;
+  }
+
+  const absoluteUrl = toAbsoluteUrl(baseUrl, raw);
+  if (!absoluteUrl) {
+    return raw;
+  }
+
+  try {
+    const fetched = await page.evaluate(
+      async ({ url, timeout }) => {
+        const controller = new AbortController();
+        const timer = window.setTimeout(() => controller.abort(), timeout);
+
+        try {
+          const response = await fetch(url, { signal: controller.signal });
+          if (!response.ok) {
+            throw new Error(`Failed to fetch resource: ${response.status}`);
+          }
+
+          const contentType = (response.headers.get('content-type') ?? '').toLowerCase();
+          if (!contentType.startsWith('image/')) {
+            return url;
+          }
+
+          const bytes = new Uint8Array(await response.arrayBuffer());
+          let binary = '';
+          for (const byte of bytes) {
+            binary += String.fromCharCode(byte);
+          }
+
+          return `data:${contentType};base64,${btoa(binary)}`;
+        } finally {
+          window.clearTimeout(timer);
+        }
+      },
+      { url: absoluteUrl, timeout: timeoutMs }
+    );
+
+    return fetched;
+  } catch {
+    return absoluteUrl;
   }
 }

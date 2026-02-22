@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { extractFieldFromHtml, extractNextUrlFromHtml } from '../lib/selectorEval';
-import { type ExtractMode, type ProfileDraft, type SelectorType } from '../types/profile';
+import { type AttributeUrlMode, type ExtractMode, type ProfileDraft, type SelectorType } from '../types/profile';
 
 type ProfileEditorFormProps = {
   mode: 'create' | 'edit';
@@ -111,6 +111,18 @@ export function ProfileEditorForm({ mode, draft, onChange, onSave, onCancel }: P
                 onChange={(event) => onChange('contentAttributeName', event.target.value)}
                 style={{ width: '100%' }}
               />
+            </label>
+
+            <label>
+              Attribute URL Handling
+              <select
+                value={draft.contentAttributeUrlMode}
+                onChange={(event) => onChange('contentAttributeUrlMode', event.target.value as AttributeUrlMode)}
+                disabled={draft.extractMode !== 'attribute'}
+              >
+                <option value="value">Keep URL/value</option>
+                <option value="fetch-image-data-url">Fetch image and store as data URL</option>
+              </select>
             </label>
 
             <label style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>

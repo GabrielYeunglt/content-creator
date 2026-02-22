@@ -17,6 +17,7 @@ type VirtualBrowserCrawlRequest = {
     selector: string;
     extractMode: 'text' | 'html' | 'attribute';
     attributeName?: string;
+    attributeUrlMode?: 'value' | 'fetch-image-data-url';
   };
   paginationRule: {
     selectorType: 'css' | 'xpath';
@@ -104,7 +105,8 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
         selectorType: primaryRule.selectorType,
         selector: primaryRule.selector,
         extractMode: primaryRule.extractMode,
-        attributeName: primaryRule.attributeName
+        attributeName: primaryRule.attributeName,
+        attributeUrlMode: primaryRule.attributeUrlMode
       },
       paginationRule: {
         selectorType: profile.paginationRule.selectorType,
