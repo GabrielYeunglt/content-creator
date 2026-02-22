@@ -19,7 +19,6 @@ type VirtualBrowserCrawlRequest = {
     attributeName?: string;
     attributeUrlMode?: 'value' | 'fetch-image-data-url';
   };
-<<<<<<< HEAD
   metadataRules?: Array<{
     fieldType: 'title' | 'author' | 'chapter' | 'publisher' | 'series' | 'cover' | 'language' | 'description' | 'other';
     customFieldName?: string;
@@ -29,8 +28,6 @@ type VirtualBrowserCrawlRequest = {
     attributeName?: string;
     attributeUrlMode?: 'value' | 'fetch-image-data-url';
   }>;
-=======
->>>>>>> 6d414060f5b901795e0a0f23b51998d2bc638ed3
   paginationRule: {
     selectorType: 'css' | 'xpath';
     selector: string;
@@ -54,10 +51,7 @@ type VirtualBrowserCrawlResponse = {
   pages: Array<{
     url: string;
     content: string;
-<<<<<<< HEAD
     metadata?: Record<string, string>;
-=======
->>>>>>> 6d414060f5b901795e0a0f23b51998d2bc638ed3
     stylesheets: string[];
     scripts: string[];
   }>;
@@ -127,7 +121,6 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
         attributeName: primaryRule.attributeName,
         attributeUrlMode: primaryRule.attributeUrlMode
       },
-<<<<<<< HEAD
       metadataRules: (profile.metadataRules ?? []).map((rule) => ({
         fieldType: rule.fieldType,
         customFieldName: rule.customFieldName,
@@ -137,8 +130,6 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
         attributeName: rule.attributeName,
         attributeUrlMode: rule.attributeUrlMode
       })),
-=======
->>>>>>> 6d414060f5b901795e0a0f23b51998d2bc638ed3
       paginationRule: {
         selectorType: profile.paginationRule.selectorType,
         selector: profile.paginationRule.selector,
@@ -159,10 +150,7 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
       url: item.url,
       content: item.content,
       preview: cleanPreview(item.content),
-<<<<<<< HEAD
       metadata: item.metadata,
-=======
->>>>>>> 6d414060f5b901795e0a0f23b51998d2bc638ed3
       stylesheets: item.stylesheets,
       scripts: item.scripts
     }));
@@ -187,10 +175,7 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
         sourceDomain: consolidated.sourceDomain,
         generatedAt: consolidated.generatedAt,
         chapterCount: consolidated.chapters.length
-<<<<<<< HEAD
         ,metadata: consolidated.metadata
-=======
->>>>>>> 6d414060f5b901795e0a0f23b51998d2bc638ed3
       },
       stopReason: result.stopReason,
       note: `Virtual-browser crawl completed with stop reason: ${result.stopReason}.`

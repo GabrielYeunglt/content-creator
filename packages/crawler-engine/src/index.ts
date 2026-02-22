@@ -16,7 +16,6 @@ export type CrawlSelectorRule = {
   attributeUrlMode?: 'value' | 'fetch-image-data-url';
 };
 
-<<<<<<< HEAD
 export type CrawlMetadataRule = {
   fieldType: 'title' | 'author' | 'chapter' | 'publisher' | 'series' | 'cover' | 'language' | 'description' | 'other';
   customFieldName?: string;
@@ -27,8 +26,6 @@ export type CrawlMetadataRule = {
   attributeUrlMode?: 'value' | 'fetch-image-data-url';
 };
 
-=======
->>>>>>> 6d414060f5b901795e0a0f23b51998d2bc638ed3
 export type CrawlPaginationRule = {
   selectorType: SelectorType;
   selector: string;
@@ -62,10 +59,7 @@ export type VirtualBrowserCrawlOptions = {
     timeoutMs?: number;
   };
   interactionSteps?: CrawlInteractionStep[];
-<<<<<<< HEAD
   metadataRules?: CrawlMetadataRule[];
-=======
->>>>>>> 6d414060f5b901795e0a0f23b51998d2bc638ed3
 };
 
 export type CrawledPage = {
@@ -73,10 +67,7 @@ export type CrawledPage = {
   content: string;
   stylesheets: string[];
   scripts: string[];
-<<<<<<< HEAD
   metadata?: Record<string, string>;
-=======
->>>>>>> 6d414060f5b901795e0a0f23b51998d2bc638ed3
 };
 
 export type CrawlErrorRecord = {
@@ -179,12 +170,8 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
     stopRules,
     timeoutMs = 30000,
     contentReadySelector,
-<<<<<<< HEAD
     interactionSteps = [],
     metadataRules = []
-=======
-    interactionSteps = []
->>>>>>> 6d414060f5b901795e0a0f23b51998d2bc638ed3
   } = options;
 
   const visited = new Set<string>();
@@ -285,7 +272,6 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
           timeoutMs
         });
 
-<<<<<<< HEAD
         const metadata: Record<string, string> = {};
         for (const rule of metadataRules) {
           const metadataKey = resolveMetadataKey(rule);
@@ -321,8 +307,6 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
           }
         }
 
-=======
->>>>>>> 6d414060f5b901795e0a0f23b51998d2bc638ed3
         const nextValue = await page.evaluate(
           ({ selectorType, selector, attributeName }) => {
             const firstNode = selectorType === 'css'
@@ -361,12 +345,8 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
           url: currentUrl,
           content: content ?? '',
           stylesheets: Array.from(new Set([...domAssets.stylesheets, ...networkStylesheets])),
-<<<<<<< HEAD
           scripts: Array.from(new Set([...domAssets.scripts, ...networkScripts])),
           metadata
-=======
-          scripts: Array.from(new Set([...domAssets.scripts, ...networkScripts]))
->>>>>>> 6d414060f5b901795e0a0f23b51998d2bc638ed3
         });
 
         consecutiveErrors = 0;
@@ -399,11 +379,7 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
 async function resolveContentValue(params: {
   page: PlaywrightPageLike;
   baseUrl: string;
-<<<<<<< HEAD
   contentRule: Pick<CrawlSelectorRule, 'extractMode' | 'attributeUrlMode'>;
-=======
-  contentRule: CrawlSelectorRule;
->>>>>>> 6d414060f5b901795e0a0f23b51998d2bc638ed3
   extractedValue: string | null;
   timeoutMs: number;
 }): Promise<string> {
@@ -456,7 +432,6 @@ async function resolveContentValue(params: {
     return absoluteUrl;
   }
 }
-<<<<<<< HEAD
 
 function resolveMetadataKey(rule: CrawlMetadataRule): string {
   if (rule.fieldType === 'other') {
@@ -465,5 +440,3 @@ function resolveMetadataKey(rule: CrawlMetadataRule): string {
 
   return rule.fieldType;
 }
-=======
->>>>>>> 6d414060f5b901795e0a0f23b51998d2bc638ed3

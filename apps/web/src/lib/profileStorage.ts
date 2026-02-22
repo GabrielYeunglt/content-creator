@@ -158,7 +158,6 @@ export function profileToDraft(profile: WebsiteProfile): ProfileDraft {
     required: primary?.required ?? defaultProfileDraft.required,
     contentAttributeName: primary?.attributeName ?? defaultProfileDraft.contentAttributeName,
     contentAttributeUrlMode: primary?.attributeUrlMode ?? defaultProfileDraft.contentAttributeUrlMode,
-<<<<<<< HEAD
     metadataRules: (profile.metadataRules ?? []).map((rule) => ({
       id: rule.id,
       fieldType: rule.fieldType,
@@ -169,8 +168,6 @@ export function profileToDraft(profile: WebsiteProfile): ProfileDraft {
       attributeName: rule.attributeName ?? 'href',
       attributeUrlMode: rule.attributeUrlMode ?? defaultProfileDraft.contentAttributeUrlMode
     })),
-=======
->>>>>>> 6d414060f5b901795e0a0f23b51998d2bc638ed3
     nextSelectorType: profile.paginationRule.selectorType,
     nextSelector: profile.paginationRule.selector,
     nextAttributeName: profile.paginationRule.attributeName,

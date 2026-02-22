@@ -12,7 +12,6 @@ declare global {
         attributeName?: string;
         attributeUrlMode?: 'value' | 'fetch-image-data-url';
       };
-<<<<<<< HEAD
       metadataRules?: Array<{
         fieldType: 'title' | 'author' | 'chapter' | 'publisher' | 'series' | 'cover' | 'language' | 'description' | 'other';
         customFieldName?: string;
@@ -22,8 +21,6 @@ declare global {
         attributeName?: string;
         attributeUrlMode?: 'value' | 'fetch-image-data-url';
       }>;
-=======
->>>>>>> 6d414060f5b901795e0a0f23b51998d2bc638ed3
       paginationRule: {
         selectorType: 'css' | 'xpath';
         selector: string;
@@ -49,10 +46,7 @@ declare global {
       pages: Array<{
         url: string;
         content: string;
-<<<<<<< HEAD
         metadata?: Record<string, string>;
-=======
->>>>>>> 6d414060f5b901795e0a0f23b51998d2bc638ed3
         stylesheets: string[];
         scripts: string[];
       }>;
