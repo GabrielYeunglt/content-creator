@@ -16,10 +16,7 @@ export type CanonicalChapter = {
     stylesheets: string[];
     scripts: string[];
   };
-<<<<<<< HEAD
   metadata?: Record<string, string>;
-=======
->>>>>>> 6d414060f5b901795e0a0f23b51998d2bc638ed3
 };
 
 export type CanonicalDocument = {
@@ -28,20 +25,14 @@ export type CanonicalDocument = {
   sourceDomain: string;
   chapters: CanonicalChapter[];
   generatedAt: string;
-<<<<<<< HEAD
   metadata: Record<string, string>;
-=======
->>>>>>> 6d414060f5b901795e0a0f23b51998d2bc638ed3
 };
 
 export type ConsolidationInputPage = {
   url: string;
   content?: string;
   preview: string;
-<<<<<<< HEAD
   metadata?: Record<string, string>;
-=======
->>>>>>> 6d414060f5b901795e0a0f23b51998d2bc638ed3
   stylesheets?: string[];
   scripts?: string[];
 };
@@ -54,33 +45,22 @@ export function buildCanonicalDocument(params: {
 }): CanonicalDocument {
   const { jobId, profileName, profileDomain, pages } = params;
 
-<<<<<<< HEAD
   const documentMetadata = mergeDocumentMetadata(pages);
 
-=======
->>>>>>> 6d414060f5b901795e0a0f23b51998d2bc638ed3
   return {
     id: jobId,
     title: profileName,
     sourceDomain: profileDomain,
     generatedAt: new Date().toISOString(),
-<<<<<<< HEAD
     metadata: documentMetadata,
     chapters: pages.map((page, index) => ({
       id: `${jobId}-chapter-${index + 1}`,
       sourceUrl: page.url,
       title: page.metadata?.chapter || page.metadata?.title || `Chapter ${index + 1}`,
-=======
-    chapters: pages.map((page, index) => ({
-      id: `${jobId}-chapter-${index + 1}`,
-      sourceUrl: page.url,
-      title: `Chapter ${index + 1}`,
->>>>>>> 6d414060f5b901795e0a0f23b51998d2bc638ed3
       bodyHtml: page.content ?? page.preview,
       assets: {
         stylesheets: page.stylesheets ?? [],
         scripts: page.scripts ?? []
-<<<<<<< HEAD
       },
       metadata: page.metadata
     }))
@@ -100,9 +80,3 @@ function mergeDocumentMetadata(pages: ConsolidationInputPage[]): Record<string, 
 
   return metadata;
 }
-=======
-      }
-    }))
-  };
-}
->>>>>>> 6d414060f5b901795e0a0f23b51998d2bc638ed3
