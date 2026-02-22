@@ -280,7 +280,7 @@ async function replaceDataImageUrls(
 }
 
 function parseDataImageUrl(dataUrl: string): { data: Uint8Array; extension: string } | null {
-  const match = dataUrl.match(/^data:image\/([\w.+-]+);base64,(.+)$/i);
+  const match = dataUrl.match(/^data:image\/([\w.+-]+)(?:;[^;,=]+=[^;,]+)*(?:;base64),(.+)$/i);
   if (!match) {
     return null;
   }
