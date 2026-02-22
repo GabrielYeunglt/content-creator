@@ -196,18 +196,71 @@ async function resolveNextUrl(params: {
     return resolvedFromAttribute;
   }
 
-  const beforeClickUrl = await page.evaluate(() => window.location.href);
+  const getPageState = async () => page.evaluate(() => {
+    const select = document.querySelector('#pageSelect');
+    const selectedValue = select instanceof HTMLSelectElement ? (select.value || '') : '';
+    const pageIndicator = (document.querySelector('#page')?.textContent ?? '').trim();
+    return {
+      href: window.location.href,
+      selectedValue,
+      pageIndicator
+    };
+  });
+
+  const before = await getPageState();
   const nextSelector = toCssSelector(paginationRule.selectorType, paginationRule.selector);
   await page.waitForSelector(nextSelector, { timeout: timeoutMs });
   await page.click(nextSelector, { timeout: timeoutMs });
-  await page.waitForTimeout(400);
-  const afterClickUrl = await page.evaluate(() => window.location.href);
+  await page.waitForTimeout(500);
+  const afterClick = await getPageState();
 
-  if (afterClickUrl === beforeClickUrl) {
+  const resolvedAfterClick = toAbsoluteUrl(currentUrl, afterClick.href);
+  if (resolvedAfterClick && resolvedAfterClick !== toAbsoluteUrl(currentUrl, before.href)) {
+    return resolvedAfterClick;
+  }
+
+  if (afterClick.selectedValue && afterClick.selectedValue !== before.selectedValue) {
+    return toAbsoluteUrl(currentUrl, `#p=${afterClick.selectedValue}`);
+  }
+
+  if (afterClick.pageIndicator && afterClick.pageIndicator !== before.pageIndicator) {
+    return toAbsoluteUrl(currentUrl, `#p=${afterClick.pageIndicator}`);
+  }
+
+  const selectedViaDropdown = await page.evaluate(() => {
+    const select = document.querySelector('#pageSelect');
+    if (!(select instanceof HTMLSelectElement)) {
+      return '';
+    }
+
+    const nextIndex = select.selectedIndex + 1;
+    if (nextIndex < 0 || nextIndex >= select.options.length) {
+      return '';
+    }
+
+    const nextOption = select.options[nextIndex];
+    if (!nextOption) {
+      return '';
+    }
+
+    select.value = nextOption.value;
+    select.dispatchEvent(new Event('input', { bubbles: true }));
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    return nextOption.value.trim();
+  });
+
+  if (!selectedViaDropdown) {
     return null;
   }
 
-  return toAbsoluteUrl(currentUrl, afterClickUrl);
+  await page.waitForTimeout(500);
+  const afterSelect = await getPageState();
+  const resolvedAfterSelect = toAbsoluteUrl(currentUrl, afterSelect.href);
+  if (resolvedAfterSelect && resolvedAfterSelect !== toAbsoluteUrl(currentUrl, before.href)) {
+    return resolvedAfterSelect;
+  }
+
+  return toAbsoluteUrl(currentUrl, `#p=${selectedViaDropdown}`);
 }
 
 
