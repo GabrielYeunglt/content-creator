@@ -25,7 +25,12 @@ function sanitizeProfile(candidate: Partial<WebsiteProfile>): WebsiteProfile | n
     return null;
   }
 
-  const selectorRules = (candidate.selectorRules ?? []).filter((rule) => rule.selector.trim().length > 0);
+  const selectorRules = (candidate.selectorRules ?? [])
+    .filter((rule) => rule.selector.trim().length > 0)
+    .map((rule) => ({
+      ...rule,
+      attributeUrlMode: rule.attributeUrlMode ?? defaultProfileDraft.contentAttributeUrlMode
+    }));
   if (selectorRules.length === 0) {
     return null;
   }
@@ -83,6 +88,7 @@ function buildProfile(draft: ProfileDraft, id: string, createdAt: string): Websi
         selector: draft.selector.trim(),
         extractMode: draft.extractMode,
         attributeName: draft.contentAttributeName.trim() || 'href',
+        attributeUrlMode: draft.contentAttributeUrlMode,
         required: draft.required
       }
     ],
@@ -132,6 +138,7 @@ export function profileToDraft(profile: WebsiteProfile): ProfileDraft {
     extractMode: primary?.extractMode ?? defaultProfileDraft.extractMode,
     required: primary?.required ?? defaultProfileDraft.required,
     contentAttributeName: primary?.attributeName ?? defaultProfileDraft.contentAttributeName,
+    contentAttributeUrlMode: primary?.attributeUrlMode ?? defaultProfileDraft.contentAttributeUrlMode,
     nextSelectorType: profile.paginationRule.selectorType,
     nextSelector: profile.paginationRule.selector,
     nextAttributeName: profile.paginationRule.attributeName,

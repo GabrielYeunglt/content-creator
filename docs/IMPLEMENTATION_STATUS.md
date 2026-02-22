@@ -75,12 +75,25 @@ Build a profile-driven desktop/web app that crawls website content from a start 
 ### Results diagnostics
 - Results show status, stop reason, errors, pages processed, last visited URL
 - Per-page extracted records are stored and displayed (`url`, `preview`)
+- Per-page linked asset discovery for `link[rel="stylesheet"]` and `script[src]`
+- Profile selector now supports attribute URL handling mode, including optional image fetch to inline `data:` URL payloads for image-target extraction use-cases
+- Virtual-browser crawler module (`crawler-engine`) added to capture rendered content and JS/CSS via Playwright in backend runtime, including optional content-ready waits and click interaction steps
+- Consolidation layer now builds a canonical document summary (chapter count + metadata) from extracted pages for each completed crawl job
+- Export MVP advanced: export-engine now includes runtime pipelines for HTML, PDF (Playwright), EPUB (epub-gen), and manifest artifacts
+- Results UI now tracks persisted exported artifact records when desktop/backend export bridge is available
+- Results UI now includes a reviewable per-job log timeline (info/warn/error) for crawl diagnostics
+- Export UX now emphasizes user-facing HTML/EPUB outputs; manifest JSON is no longer exposed as a primary user action
+- Start Job now surfaces runtime bridge readiness indicators (crawler/export) to make standalone-web limitations explicit before execution
+- Results panel now includes stop-reason troubleshooting guidance for common runtime failures (missing bridge, crawl runtime error, out-of-domain)
+- Crawler-engine hardening started: configurable retry/backoff per page with structured error records in crawl results
+- Fixture-based integration checks now cover no-next, visited-loop, shared asset serving, default route behavior, and invalid path handling
+- Added repeatable smoke validation command (`npm run test:smoke`) that runs fixture integration tests and monorepo typecheck
 
 ---
 
 ## ⚠️ Known Limitation
-- Current fetch/extract runs in browser context, so some sites fail due to CORS.
-- Next hardening step should move fetch/extract to desktop/backend runtime (Tauri/Rust or Node sidecar) to remove this limitation.
+- Browser-only use (without running the desktop bridge service) still fails fast for crawl/export operations that require backend runtime capabilities.
+- PDF/EPUB export still depends on runtime packages (`playwright`, `epub-gen`) being installed in the bridge environment.
 
 ---
 
@@ -88,16 +101,14 @@ Build a profile-driven desktop/web app that crawls website content from a start 
 
 1. **Consolidation layer**
    - Build canonical chapter/page model from `extractedPages`.
-2. **Export MVP**
-   - Implement HTML -> PDF export.
-   - Implement EPUB export.
-3. **Execution runtime upgrade**
-   - Move crawler fetch/extract from browser to backend runtime to avoid CORS issues.
-4. **Validation/testing pass**
-   - Add fixture-based integration tests for crawl stop conditions and selector extraction.
+2. **Production packaging**
+   - Package desktop bridge service into Tauri/Electron runtime distribution and startup lifecycle.
+   - Finalize runtime dependency provisioning (`playwright`, `epub-gen`) across deployment targets.
+3. **Validation/testing pass**
+   - Expand integration tests from fixture smoke coverage to full crawl/extraction assertions and export artifact checks.
 
 ---
 
 ## Milestone Snapshot
-- Current milestone: **V1 Step 7**
-- Practical state: **Profile-driven crawling MVP in place, export pipeline pending**.
+- Current milestone: **V1 Step 9**
+- Practical state: **Backend crawl/export bridge service is now implemented for local/dev runtime; production desktop packaging and deeper end-to-end coverage remain**.
