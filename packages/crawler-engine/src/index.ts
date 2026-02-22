@@ -176,9 +176,14 @@ async function resolveNextUrl(params: {
 
   const nextValue = await page.evaluate(
     ({ selectorType, selector, attributeName }) => {
-      const firstNode = selectorType === 'css'
-        ? document.querySelector(selector)
-        : document.evaluate(selector, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+      let firstNode: Node | null = null;
+      try {
+        firstNode = selectorType === 'css'
+          ? document.querySelector(selector)
+          : document.evaluate(selector, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+      } catch {
+        return '';
+      }
 
       if (!firstNode || !(firstNode instanceof Element)) return '';
       return firstNode.getAttribute(attributeName)?.trim() ?? '';
@@ -210,9 +215,14 @@ async function resolveNextUrl(params: {
 async function extractTotalPages(page: PlaywrightPageLike, rule: CrawlTotalPagesRule): Promise<number | null> {
   const rawValue = await page.evaluate(
     ({ selectorType, selector, attributeName }) => {
-      const firstNode = selectorType === 'css'
-        ? document.querySelector(selector)
-        : document.evaluate(selector, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+      let firstNode: Node | null = null;
+      try {
+        firstNode = selectorType === 'css'
+          ? document.querySelector(selector)
+          : document.evaluate(selector, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+      } catch {
+        return '';
+      }
 
       if (!firstNode || !(firstNode instanceof Element)) return '';
 
@@ -340,9 +350,14 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
 
         const extractedValue = await page.evaluate(
           ({ selectorType, selector, extractMode, attributeName }) => {
-            const firstNode = selectorType === 'css'
-              ? document.querySelector(selector)
-              : document.evaluate(selector, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+            let firstNode: Node | null = null;
+            try {
+              firstNode = selectorType === 'css'
+                ? document.querySelector(selector)
+                : document.evaluate(selector, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+            } catch {
+              return null;
+            }
 
             if (!firstNode || !(firstNode instanceof Element)) return null;
             if (extractMode === 'html') return firstNode.innerHTML.trim();
@@ -370,9 +385,14 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
 
           const extractedMetadata = await page.evaluate(
             ({ selectorType, selector, extractMode, attributeName }) => {
-              const firstNode = selectorType === 'css'
-                ? document.querySelector(selector)
-                : document.evaluate(selector, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+              let firstNode: Node | null = null;
+              try {
+                firstNode = selectorType === 'css'
+                  ? document.querySelector(selector)
+                  : document.evaluate(selector, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+              } catch {
+                return '';
+              }
 
               if (!firstNode || !(firstNode instanceof Element)) return '';
               if (extractMode === 'html') return firstNode.innerHTML.trim();
