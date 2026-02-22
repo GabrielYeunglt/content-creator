@@ -25,6 +25,12 @@ declare global {
         selectorType: 'css' | 'xpath';
         selector: string;
         attributeName: string;
+        navigationMode?: 'url-attribute' | 'click';
+      };
+      totalPagesRule?: {
+        selectorType: 'css' | 'xpath';
+        selector: string;
+        attributeName?: string;
       };
       stopRules: {
         maxPages: number;
@@ -43,6 +49,7 @@ declare global {
         attempt: number;
         error: string;
       }>;
+      notes?: string[];
       pages: Array<{
         url: string;
         content: string;
