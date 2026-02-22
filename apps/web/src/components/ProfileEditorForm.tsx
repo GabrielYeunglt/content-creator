@@ -1,6 +1,12 @@
 import { useState } from 'react';
 import { extractFieldFromHtml, extractNextUrlFromHtml } from '../lib/selectorEval';
-import { type AttributeUrlMode, type ExtractMode, type ProfileDraft, type SelectorType } from '../types/profile';
+import {
+  type AttributeUrlMode,
+  type ExtractMode,
+  type MetadataFieldType,
+  type ProfileDraft,
+  type SelectorType
+} from '../types/profile';
 
 type ProfileEditorFormProps = {
   mode: 'create' | 'edit';
@@ -45,6 +51,36 @@ export function ProfileEditorForm({ mode, draft, onChange, onSave, onCancel }: P
     ];
 
     setTestOutput(lines.join('\n'));
+  }
+
+  function addMetadataRule() {
+    onChange('metadataRules', [
+      ...draft.metadataRules,
+      {
+        id: crypto.randomUUID(),
+        fieldType: 'title',
+        customFieldName: '',
+        selectorType: 'css',
+        selector: '',
+        extractMode: 'text',
+        attributeName: 'href',
+        attributeUrlMode: 'value'
+      }
+    ]);
+  }
+
+  function updateMetadataRule(index: number, patch: Partial<ProfileDraft['metadataRules'][number]>) {
+    onChange(
+      'metadataRules',
+      draft.metadataRules.map((rule, ruleIndex) => (ruleIndex === index ? { ...rule, ...patch } : rule))
+    );
+  }
+
+  function removeMetadataRule(index: number) {
+    onChange(
+      'metadataRules',
+      draft.metadataRules.filter((_, ruleIndex) => ruleIndex !== index)
+    );
   }
 
   return (
@@ -129,6 +165,115 @@ export function ProfileEditorForm({ mode, draft, onChange, onSave, onCancel }: P
               <input type="checkbox" checked={draft.required} onChange={(event) => onChange('required', event.target.checked)} />
               Required
             </label>
+          </div>
+        </fieldset>
+
+        <fieldset style={{ border: '1px solid #ddd', padding: '0.75rem' }}>
+          <legend>Optional Book Metadata Extractions</legend>
+          <p style={{ marginTop: 0 }}>
+            Add any optional fields (Title, Author, Chapter, Publisher, Series, Cover, etc.) that should flow into EPUB metadata
+            and HTML header details.
+          </p>
+          <div style={{ display: 'grid', gap: '0.75rem' }}>
+            {draft.metadataRules.map((rule, index) => (
+              <div key={rule.id || `${index}`} style={{ border: '1px solid #eee', padding: '0.5rem' }}>
+                <div style={{ display: 'grid', gap: '0.5rem' }}>
+                  <label>
+                    Field Type
+                    <select
+                      value={rule.fieldType}
+                      onChange={(event) => updateMetadataRule(index, { fieldType: event.target.value as MetadataFieldType })}
+                    >
+                      <option value="title">Title</option>
+                      <option value="author">Author</option>
+                      <option value="chapter">Chapter</option>
+                      <option value="publisher">Publisher</option>
+                      <option value="series">Series</option>
+                      <option value="cover">Cover</option>
+                      <option value="language">Language</option>
+                      <option value="description">Description</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </label>
+
+                  {rule.fieldType === 'other' && (
+                    <label>
+                      Custom Field Name
+                      <input
+                        value={rule.customFieldName}
+                        onChange={(event) => updateMetadataRule(index, { customFieldName: event.target.value })}
+                        style={{ width: '100%' }}
+                      />
+                    </label>
+                  )}
+
+                  <label>
+                    Selector Type
+                    <select
+                      value={rule.selectorType}
+                      onChange={(event) => updateMetadataRule(index, { selectorType: event.target.value as SelectorType })}
+                    >
+                      <option value="css">CSS</option>
+                      <option value="xpath">XPath</option>
+                    </select>
+                  </label>
+
+                  <label>
+                    Selector
+                    <input
+                      value={rule.selector}
+                      onChange={(event) => updateMetadataRule(index, { selector: event.target.value })}
+                      style={{ width: '100%' }}
+                    />
+                  </label>
+
+                  <label>
+                    Extract Mode
+                    <select
+                      value={rule.extractMode}
+                      onChange={(event) => updateMetadataRule(index, { extractMode: event.target.value as ExtractMode })}
+                    >
+                      <option value="text">Text</option>
+                      <option value="html">HTML</option>
+                      <option value="attribute">Attribute</option>
+                    </select>
+                  </label>
+
+                  <label>
+                    Attribute Name (for attribute mode)
+                    <input
+                      value={rule.attributeName}
+                      onChange={(event) => updateMetadataRule(index, { attributeName: event.target.value })}
+                      style={{ width: '100%' }}
+                    />
+                  </label>
+
+                  <label>
+                    Attribute URL Handling
+                    <select
+                      value={rule.attributeUrlMode}
+                      onChange={(event) => updateMetadataRule(index, { attributeUrlMode: event.target.value as AttributeUrlMode })}
+                      disabled={rule.extractMode !== 'attribute'}
+                    >
+                      <option value="value">Keep URL/value</option>
+                      <option value="fetch-image-data-url">Fetch image and store as data URL</option>
+                    </select>
+                  </label>
+
+                  <div>
+                    <button type="button" onClick={() => removeMetadataRule(index)}>
+                      Remove Metadata Rule
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            <div>
+              <button type="button" onClick={addMetadataRule}>
+                Add Metadata Extraction
+              </button>
+            </div>
           </div>
         </fieldset>
 

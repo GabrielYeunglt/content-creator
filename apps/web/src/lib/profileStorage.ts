@@ -40,6 +40,13 @@ function sanitizeProfile(candidate: Partial<WebsiteProfile>): WebsiteProfile | n
     name: candidate.name.trim(),
     domain: normalizeDomain(candidate.domain),
     selectorRules,
+    metadataRules: (candidate.metadataRules ?? [])
+      .filter((rule) => rule.selector.trim().length > 0)
+      .map((rule) => ({
+        ...rule,
+        customFieldName: rule.customFieldName?.trim() || '',
+        attributeUrlMode: rule.attributeUrlMode ?? defaultProfileDraft.contentAttributeUrlMode
+      })),
     paginationRule: {
       selectorType: validSelectorType(candidate.paginationRule.selectorType)
         ? candidate.paginationRule.selectorType
@@ -92,6 +99,18 @@ function buildProfile(draft: ProfileDraft, id: string, createdAt: string): Websi
         required: draft.required
       }
     ],
+    metadataRules: draft.metadataRules
+      .filter((rule) => rule.selector.trim().length > 0)
+      .map((rule) => ({
+        id: rule.id || crypto.randomUUID(),
+        fieldType: rule.fieldType,
+        customFieldName: rule.customFieldName.trim(),
+        selectorType: rule.selectorType,
+        selector: rule.selector.trim(),
+        extractMode: rule.extractMode,
+        attributeName: rule.attributeName.trim() || 'href',
+        attributeUrlMode: rule.attributeUrlMode
+      })),
     paginationRule: {
       selectorType: draft.nextSelectorType,
       selector: draft.nextSelector.trim(),
@@ -139,6 +158,19 @@ export function profileToDraft(profile: WebsiteProfile): ProfileDraft {
     required: primary?.required ?? defaultProfileDraft.required,
     contentAttributeName: primary?.attributeName ?? defaultProfileDraft.contentAttributeName,
     contentAttributeUrlMode: primary?.attributeUrlMode ?? defaultProfileDraft.contentAttributeUrlMode,
+<<<<<<< HEAD
+    metadataRules: (profile.metadataRules ?? []).map((rule) => ({
+      id: rule.id,
+      fieldType: rule.fieldType,
+      customFieldName: rule.customFieldName ?? '',
+      selectorType: rule.selectorType,
+      selector: rule.selector,
+      extractMode: rule.extractMode,
+      attributeName: rule.attributeName ?? 'href',
+      attributeUrlMode: rule.attributeUrlMode ?? defaultProfileDraft.contentAttributeUrlMode
+    })),
+=======
+>>>>>>> 6d414060f5b901795e0a0f23b51998d2bc638ed3
     nextSelectorType: profile.paginationRule.selectorType,
     nextSelector: profile.paginationRule.selector,
     nextAttributeName: profile.paginationRule.attributeName,

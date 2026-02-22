@@ -37,6 +37,13 @@ export function renderCanonicalHtml(document: CanonicalDocument): string {
     )
     .join('\n');
 
+<<<<<<< HEAD
+  const metadataHtml = Object.entries(document.metadata)
+    .map(([key, value]) => `<li><strong>${escapeHtml(toLabel(key))}:</strong> ${escapeHtml(value)}</li>`)
+    .join('');
+
+=======
+>>>>>>> 6d414060f5b901795e0a0f23b51998d2bc638ed3
   return `<!doctype html>
 <html lang="en">
   <head>
@@ -50,12 +57,20 @@ export function renderCanonicalHtml(document: CanonicalDocument): string {
       .chapter-body { margin-top: 12px; }
       .chapter-body img { max-width: 100%; height: auto; display: block; }
       .meta { color: #666; font-size: 0.9rem; }
+<<<<<<< HEAD
+      .meta-list { color: #444; font-size: 0.95rem; }
+=======
+>>>>>>> 6d414060f5b901795e0a0f23b51998d2bc638ed3
     </style>
   </head>
   <body>
     <h1>${escapeHtml(document.title)}</h1>
     <p class="meta">Source domain: ${escapeHtml(document.sourceDomain)}</p>
     <p class="meta">Generated at: ${escapeHtml(document.generatedAt)}</p>
+<<<<<<< HEAD
+    ${metadataHtml ? `<ul class="meta-list">${metadataHtml}</ul>` : ''}
+=======
+>>>>>>> 6d414060f5b901795e0a0f23b51998d2bc638ed3
     ${chapterHtml}
   </body>
 </html>`;
@@ -81,6 +96,10 @@ export function renderEpubLikeManifest(document: CanonicalDocument): string {
       title: document.title,
       sourceDomain: document.sourceDomain,
       generatedAt: document.generatedAt,
+<<<<<<< HEAD
+      metadata: document.metadata,
+=======
+>>>>>>> 6d414060f5b901795e0a0f23b51998d2bc638ed3
       chapters: document.chapters.map((chapter) => ({
         id: chapter.id,
         title: chapter.title,
@@ -171,6 +190,13 @@ async function renderEpubFromCanonicalDocument(params: {
     options: {
       title: string;
       author: string;
+<<<<<<< HEAD
+      publisher?: string;
+      cover?: string;
+      description?: string;
+      language?: string;
+=======
+>>>>>>> 6d414060f5b901795e0a0f23b51998d2bc638ed3
       content: Array<{ title: string; data: string }>;
     },
     output: string
@@ -178,13 +204,25 @@ async function renderEpubFromCanonicalDocument(params: {
 
   const content = document.chapters.map((chapter) => ({
     title: chapter.title,
+<<<<<<< HEAD
+    data: renderChapterBody(chapter.bodyHtml)
+=======
     data: chapter.bodyHtml
+>>>>>>> 6d414060f5b901795e0a0f23b51998d2bc638ed3
   }));
 
   const instance = new EpubConstructor(
     {
       title: document.title,
+<<<<<<< HEAD
+      author: document.metadata.author || document.sourceDomain,
+      publisher: document.metadata.publisher,
+      cover: document.metadata.cover,
+      description: document.metadata.description,
+      language: document.metadata.language,
+=======
       author: document.sourceDomain,
+>>>>>>> 6d414060f5b901795e0a0f23b51998d2bc638ed3
       content
     },
     outputEpubPath
@@ -198,6 +236,15 @@ async function renderEpubFromCanonicalDocument(params: {
   throw new Error('epub-gen did not return a promise; check runtime package version.');
 }
 
+<<<<<<< HEAD
+function toLabel(key: string): string {
+  return key
+    .replaceAll('_', ' ')
+    .replace(/\b\w/g, (match) => match.toUpperCase());
+}
+
+=======
+>>>>>>> 6d414060f5b901795e0a0f23b51998d2bc638ed3
 function escapeHtml(value: string): string {
   return value
     .replaceAll('&', '&amp;')

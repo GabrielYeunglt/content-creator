@@ -88,12 +88,20 @@ Build a profile-driven desktop/web app that crawls website content from a start 
 - Per-page extracted records are stored and displayed (`url`, `preview`)
 - Per-page linked asset discovery for `link[rel="stylesheet"]` and `script[src]`
 - Profile selector now supports attribute URL handling mode, including optional image fetch to inline `data:` URL payloads for image-target extraction use-cases
+<<<<<<< HEAD
+- Profile manager now supports optional dynamic metadata extraction rules (title/author/chapter/publisher/series/cover/language/description/other) for export metadata enrichment
+=======
+>>>>>>> 6d414060f5b901795e0a0f23b51998d2bc638ed3
 - Virtual-browser crawler module (`crawler-engine`) added to capture rendered content and JS/CSS via Playwright in backend runtime, including optional content-ready waits and click interaction steps
 - Consolidation layer now builds a canonical document summary (chapter count + metadata) from extracted pages for each completed crawl job
 - Export MVP advanced: export-engine now includes runtime pipelines for HTML, PDF (Playwright), EPUB (epub-gen), and manifest artifacts
 - Results UI now tracks persisted exported artifact records when desktop/backend export bridge is available
 - Results UI now includes a reviewable per-job log timeline (info/warn/error) for crawl diagnostics
 - Export UX now emphasizes user-facing HTML/EPUB outputs; manifest JSON is no longer exposed as a primary user action
+<<<<<<< HEAD
+- Export HTML/EPUB rendering now treats image payload chapters as images (not raw data URL text), and extracted metadata appears in exported document metadata/header output
+=======
+>>>>>>> 6d414060f5b901795e0a0f23b51998d2bc638ed3
 - Start Job now surfaces runtime bridge readiness indicators (crawler/export) to make standalone-web limitations explicit before execution
 - Results panel now includes stop-reason troubleshooting guidance for common runtime failures (missing bridge, crawl runtime error, out-of-domain)
 - Crawler-engine hardening started: configurable retry/backoff per page with structured error records in crawl results
@@ -103,7 +111,10 @@ Build a profile-driven desktop/web app that crawls website content from a start 
 ---
 
 ## ⚠️ Known Limitation
+<<<<<<< HEAD
+=======
 
+>>>>>>> 6d414060f5b901795e0a0f23b51998d2bc638ed3
 - Browser-only use (without running the desktop bridge service) still fails fast for crawl/export operations that require backend runtime capabilities.
 - PDF/EPUB export still depends on runtime packages (`playwright`, `epub-gen`) being installed in the bridge environment.
 
@@ -122,6 +133,9 @@ Build a profile-driven desktop/web app that crawls website content from a start 
 ---
 
 ## Milestone Snapshot
+<<<<<<< HEAD
+=======
 
+>>>>>>> 6d414060f5b901795e0a0f23b51998d2bc638ed3
 - Current milestone: **V1 Step 9**
 - Practical state: **Backend crawl/export bridge service is now implemented for local/dev runtime; production desktop packaging and deeper end-to-end coverage remain**.

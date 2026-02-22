@@ -2,6 +2,19 @@ export type SelectorType = 'css' | 'xpath';
 
 export type ExtractMode = 'text' | 'html' | 'attribute';
 export type AttributeUrlMode = 'value' | 'fetch-image-data-url';
+<<<<<<< HEAD
+export type MetadataFieldType =
+  | 'title'
+  | 'author'
+  | 'chapter'
+  | 'publisher'
+  | 'series'
+  | 'cover'
+  | 'language'
+  | 'description'
+  | 'other';
+=======
+>>>>>>> 6d414060f5b901795e0a0f23b51998d2bc638ed3
 
 export type SelectorRule = {
   id: string;
@@ -31,6 +44,16 @@ export type WebsiteProfile = {
   name: string;
   domain: string;
   selectorRules: SelectorRule[];
+  metadataRules?: Array<{
+    id: string;
+    fieldType: MetadataFieldType;
+    customFieldName?: string;
+    selectorType: SelectorType;
+    selector: string;
+    extractMode: ExtractMode;
+    attributeName?: string;
+    attributeUrlMode?: AttributeUrlMode;
+  }>;
   paginationRule: PaginationRule;
   stopRules: StopRules;
   createdAt: string;
@@ -56,6 +79,19 @@ export const defaultProfileDraft = {
   required: defaultSelectorRule.required,
   contentAttributeName: 'href',
   contentAttributeUrlMode: 'value' as AttributeUrlMode,
+<<<<<<< HEAD
+  metadataRules: [] as Array<{
+    id: string;
+    fieldType: MetadataFieldType;
+    customFieldName: string;
+    selectorType: SelectorType;
+    selector: string;
+    extractMode: ExtractMode;
+    attributeName: string;
+    attributeUrlMode: AttributeUrlMode;
+  }>,
+=======
+>>>>>>> 6d414060f5b901795e0a0f23b51998d2bc638ed3
   nextSelectorType: 'css' as SelectorType,
   nextSelector: '',
   nextAttributeName: 'href',

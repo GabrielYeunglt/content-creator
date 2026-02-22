@@ -95,10 +95,31 @@ export function ResultsPanel({ jobs, onJobsUpdated }: ResultsPanelProps) {
             <p style={{ color: '#8a4f00' }}>Guidance: {stopReasonHelp(job.stopReason)}</p>
           )}
           {job.consolidatedDocument && (
+<<<<<<< HEAD
+            <div>
+              <p>
+                Consolidated document: <strong>{job.consolidatedDocument.title}</strong> (
+                {job.consolidatedDocument.chapterCount} chapter(s))
+              </p>
+              {job.consolidatedDocument.metadata && Object.keys(job.consolidatedDocument.metadata).length > 0 && (
+                <details>
+                  <summary>Book metadata</summary>
+                  <ul>
+                    {Object.entries(job.consolidatedDocument.metadata).map(([key, value]) => (
+                      <li key={`${job.id}-meta-${key}`}>
+                        <strong>{key}</strong>: {value}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+            </div>
+=======
             <p>
               Consolidated document: <strong>{job.consolidatedDocument.title}</strong> (
               {job.consolidatedDocument.chapterCount} chapter(s))
             </p>
+>>>>>>> 6d414060f5b901795e0a0f23b51998d2bc638ed3
           )}
           {job.error && <p style={{ color: '#b00020' }}>Error: {job.error}</p>}
           {job.extractedPreview && (

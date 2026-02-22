@@ -6,6 +6,10 @@ export type ConsolidatedDocumentRecord = {
   sourceDomain: string;
   generatedAt: string;
   chapterCount: number;
+<<<<<<< HEAD
+  metadata?: Record<string, string>;
+=======
+>>>>>>> 6d414060f5b901795e0a0f23b51998d2bc638ed3
 };
 
 export type ExportedArtifactRecord = {
@@ -23,6 +27,10 @@ export type ExtractedPageRecord = {
   url: string;
   content: string;
   preview: string;
+<<<<<<< HEAD
+  metadata?: Record<string, string>;
+=======
+>>>>>>> 6d414060f5b901795e0a0f23b51998d2bc638ed3
   stylesheets?: string[];
   scripts?: string[];
 };
