@@ -154,22 +154,44 @@ async function handleExport(request: ExportRequest): Promise<{ artifacts: Export
 }
 
 async function resolveExportPages(request: ExportRequest): Promise<ExportRequest['pages']> {
-  if (request.pages.length > 0) {
+  const hasAnyInlineContent = request.pages.some((page) => Boolean(page.content?.trim()));
+
+  if (!request.crawlPagesTempFileId) {
     return request.pages;
   }
 
-  if (!request.crawlPagesTempFileId) {
-    return [];
-  }
-
   const fromTemp = await readCrawlPagesTempFile(request.crawlPagesTempFileId);
-  return fromTemp.map((page) => ({
+  const mappedFromTemp = fromTemp.map((page) => ({
     url: page.url,
     content: page.content,
     preview: page.content.slice(0, 240),
     stylesheets: page.stylesheets,
     scripts: page.scripts
   }));
+
+  if (!hasAnyInlineContent) {
+    return mappedFromTemp;
+  }
+
+  const tempByUrl = new Map(mappedFromTemp.map((page) => [page.url, page]));
+  return request.pages.map((page) => {
+    if (page.content?.trim()) {
+      return page;
+    }
+
+    const fallback = tempByUrl.get(page.url);
+    if (!fallback) {
+      return page;
+    }
+
+    return {
+      ...page,
+      content: fallback.content,
+      preview: page.preview || fallback.preview,
+      stylesheets: (page.stylesheets?.length ?? 0) > 0 ? page.stylesheets : fallback.stylesheets,
+      scripts: (page.scripts?.length ?? 0) > 0 ? page.scripts : fallback.scripts
+    };
+  });
 }
 
 async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
