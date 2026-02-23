@@ -18,6 +18,8 @@ function sanitizeJobProfile(candidate: Partial<JobProfile>): JobProfile | null {
       ? Math.floor(candidate.maxPagesOverride)
       : undefined,
     metadataOverrides: candidate.metadataOverrides ?? {},
+    exportDestination: candidate.exportDestination === 'browser-download' ? 'browser-download' : 'desktop-artifacts',
+    exportFileNameTemplate: candidate.exportFileNameTemplate?.trim() || '{{job.id}}-{{date}}',
     createdAt: candidate.createdAt ?? new Date().toISOString(),
     updatedAt: candidate.updatedAt ?? new Date().toISOString()
   };
@@ -30,6 +32,10 @@ function validateJobProfileDraft(draft: JobProfileDraft): { ok: true } | { ok: f
 
   if (!draft.baseProfileId) {
     return { ok: false, error: 'A base website profile is required.' };
+  }
+
+  if (!draft.exportFileNameTemplate.trim()) {
+    return { ok: false, error: 'Export file name format is required.' };
   }
 
   return { ok: true };
@@ -47,6 +53,8 @@ function buildJobProfile(draft: JobProfileDraft, id: string, createdAt: string):
       ? Math.floor(draft.maxPagesOverride)
       : undefined,
     metadataOverrides: draft.metadataOverrides,
+    exportDestination: draft.exportDestination,
+    exportFileNameTemplate: draft.exportFileNameTemplate.trim(),
     createdAt,
     updatedAt: new Date().toISOString()
   };
@@ -97,6 +105,8 @@ export function jobProfileToDraft(profile: JobProfile): JobProfileDraft {
     paginationSelectorOverride: profile.paginationSelectorOverride ?? '',
     totalPagesSelectorOverride: profile.totalPagesSelectorOverride ?? '',
     maxPagesOverride: profile.maxPagesOverride ?? '',
-    metadataOverrides: profile.metadataOverrides ?? {}
+    metadataOverrides: profile.metadataOverrides ?? {},
+    exportDestination: profile.exportDestination ?? 'desktop-artifacts',
+    exportFileNameTemplate: profile.exportFileNameTemplate ?? '{{job.id}}-{{date}}'
   };
 }

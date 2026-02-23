@@ -23,7 +23,8 @@ export type ExportPageTemplate = {
 };
 
 export type ExportLayout = {
-  skipIndexPage: boolean;
+  disableTableOfContents: boolean;
+  coverImageSource: 'metadata.cover' | 'first-image-from-url';
   coverPage: ExportPageTemplate;
   indexPage: ExportPageTemplate;
   contentPage: ExportPageTemplate;
@@ -39,11 +40,12 @@ export type ExportPipelineOptions = {
 };
 
 const defaultExportLayout: ExportLayout = {
-  skipIndexPage: false,
+  disableTableOfContents: false,
+  coverImageSource: 'metadata.cover',
   coverPage: {
     header: ['document.title'],
-    body: ['metadata.author', 'metadata.publisher', 'document.sourceDomain'],
-    footer: ['document.generatedAt']
+    body: ['metadata.list'],
+    footer: []
   },
   indexPage: {
     header: ['label.index'],
@@ -127,7 +129,7 @@ function buildStructuredPages(document: CanonicalDocument, layout: ExportLayout)
     footerHtml: renderTemplateElements(layout.coverPage.footer, document)
   });
 
-  if (!layout.skipIndexPage) {
+  if (!layout.disableTableOfContents) {
     pages.push({
       kind: 'index',
       title: 'Index',
@@ -212,7 +214,8 @@ function sanitizeExportLayout(candidate?: ExportLayout): ExportLayout {
   }
 
   return {
-    skipIndexPage: Boolean(candidate.skipIndexPage),
+    disableTableOfContents: Boolean(candidate.disableTableOfContents),
+    coverImageSource: candidate.coverImageSource === 'first-image-from-url' ? 'first-image-from-url' : 'metadata.cover',
     coverPage: sanitizeTemplate(candidate.coverPage, defaultExportLayout.coverPage),
     indexPage: sanitizeTemplate(candidate.indexPage, defaultExportLayout.indexPage),
     contentPage: sanitizeTemplate(candidate.contentPage, defaultExportLayout.contentPage)
@@ -384,7 +387,7 @@ async function renderEpubFromCanonicalDocument(params: {
     const bookSeries = getMetadataValue(document, ['series']);
     const bookDescription = getMetadataValue(document, ['description']);
     const bookLanguage = getMetadataValue(document, ['language']);
-    const bookCover = getMetadataValue(document, ['cover']);
+    const bookCover = resolveBookCover(document, layout.coverImageSource);
 
     const instance = new EpubConstructor(
       {
@@ -418,6 +421,38 @@ async function renderEpubFromCanonicalDocument(params: {
     ].join(' ');
     throw new Error(enrichedMessage);
   }
+}
+
+function resolveBookCover(document: CanonicalDocument, coverImageSource: ExportLayout['coverImageSource']): string | undefined {
+  if (coverImageSource === 'first-image-from-url') {
+    const firstImage = findFirstImageInDocument(document);
+    if (firstImage) {
+      return firstImage;
+    }
+  }
+
+  return getMetadataValue(document, ['cover']);
+}
+
+function findFirstImageInDocument(document: CanonicalDocument): string | undefined {
+  for (const chapter of document.chapters) {
+    const body = chapter.bodyHtml ?? '';
+    const imageMatch = body.match(/<img\b[^>]*\bsrc=["']([^"']+)["'][^>]*>/i);
+    if (imageMatch?.[1]) {
+      return imageMatch[1];
+    }
+
+    if (/^data:image\//i.test(body.trim())) {
+      return body.trim();
+    }
+
+    const urlMatch = body.trim().match(/^https?:\/\/\S+$/i);
+    if (urlMatch?.[0]) {
+      return urlMatch[0];
+    }
+  }
+
+  return undefined;
 }
 
 function getMetadataValue(document: CanonicalDocument, candidates: string[]): string | undefined {

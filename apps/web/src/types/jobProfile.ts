@@ -1,6 +1,7 @@
 import type { MetadataFieldType } from './profile';
 
 export type JobMode = 'single' | 'multi';
+export type ExportDestination = 'desktop-artifacts' | 'browser-download';
 
 export type JobProfile = {
   id: string;
@@ -11,6 +12,8 @@ export type JobProfile = {
   totalPagesSelectorOverride?: string;
   maxPagesOverride?: number;
   metadataOverrides?: Partial<Record<MetadataFieldType | 'other', string>>;
+  exportDestination?: ExportDestination;
+  exportFileNameTemplate?: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -23,6 +26,8 @@ export type JobProfileDraft = {
   totalPagesSelectorOverride: string;
   maxPagesOverride: number | '';
   metadataOverrides: Partial<Record<MetadataFieldType | 'other', string>>;
+  exportDestination: ExportDestination;
+  exportFileNameTemplate: string;
 };
 
 export function createDefaultJobProfileDraft(): JobProfileDraft {
@@ -33,6 +38,8 @@ export function createDefaultJobProfileDraft(): JobProfileDraft {
     paginationSelectorOverride: '',
     totalPagesSelectorOverride: '',
     maxPagesOverride: '',
-    metadataOverrides: {}
+    metadataOverrides: {},
+    exportDestination: 'desktop-artifacts',
+    exportFileNameTemplate: '{{job.id}}-{{date}}'
   };
 }
