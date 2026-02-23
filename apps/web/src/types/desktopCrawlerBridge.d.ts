@@ -74,6 +74,12 @@ declare global {
       profileName: string;
       profileDomain: string;
       crawlPagesTempFileId?: string;
+      exportLayout?: {
+        skipIndexPage: boolean;
+        coverPage: { header: string[]; body: string[]; footer: string[] };
+        indexPage: { header: string[]; body: string[]; footer: string[] };
+        contentPage: { header: string[]; body: string[]; footer: string[] };
+      };
     }) => Promise<{
       artifacts: Array<{
         format: 'html' | 'pdf' | 'epub' | 'epub-manifest';

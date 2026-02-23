@@ -14,32 +14,84 @@ export type ExportArtifact = {
   path: string;
 };
 
+export type ExportPageElement = string;
+
+export type ExportPageTemplate = {
+  header: ExportPageElement[];
+  body: ExportPageElement[];
+  footer: ExportPageElement[];
+};
+
+export type ExportLayout = {
+  skipIndexPage: boolean;
+  coverPage: ExportPageTemplate;
+  indexPage: ExportPageTemplate;
+  contentPage: ExportPageTemplate;
+};
+
 export type ExportPipelineOptions = {
   document: CanonicalDocument;
   outputHtmlPath?: string;
   outputPdfPath?: string;
   outputEpubPath?: string;
   outputEpubManifestPath?: string;
+  exportLayout?: ExportLayout;
 };
 
-export function renderCanonicalHtml(document: CanonicalDocument): string {
-  const chapterHtml = document.chapters
-    .map(
-      (chapter) => {
-        const body = renderChapterBody(chapter.bodyHtml);
+const defaultExportLayout: ExportLayout = {
+  skipIndexPage: false,
+  coverPage: {
+    header: ['document.title'],
+    body: ['metadata.author', 'metadata.publisher', 'document.sourceDomain'],
+    footer: ['document.generatedAt']
+  },
+  indexPage: {
+    header: ['label.index'],
+    body: ['index.chapterList'],
+    footer: []
+  },
+  contentPage: {
+    header: ['chapter.title'],
+    body: ['chapter.bodyHtml'],
+    footer: ['chapter.sourceUrl']
+  }
+};
+
+type StructuredPage = {
+  kind: 'cover' | 'index' | 'content';
+  title: string;
+  sourceUrl?: string;
+  headerHtml: string;
+  bodyHtml: string;
+  footerHtml: string;
+};
+
+export function renderCanonicalHtml(document: CanonicalDocument, exportLayout?: ExportLayout): string {
+  const layout = sanitizeExportLayout(exportLayout);
+  const structuredPages = buildStructuredPages(document, layout);
+
+  const pageHtml = structuredPages
+    .map((page) => {
+      if (page.kind === 'content') {
         return `
-        <section data-source-url="${escapeHtml(chapter.sourceUrl)}">
-          <h2>${escapeHtml(chapter.title)}</h2>
-          <div class="chapter-body">${body}</div>
+        <section data-source-url="${escapeHtml(page.sourceUrl ?? '')}">
+          ${page.headerHtml ? `<header class="section-header">${page.headerHtml}</header>` : ''}
+          <div class="section-body">${page.bodyHtml}</div>
+          ${page.footerHtml ? `<footer class="section-footer">${page.footerHtml}</footer>` : ''}
         </section>
-      `
+      `;
       }
-    )
+
+      return `
+      <section>
+        ${page.headerHtml ? `<header class="section-header">${page.headerHtml}</header>` : ''}
+        <div class="section-body">${page.bodyHtml}</div>
+        ${page.footerHtml ? `<footer class="section-footer">${page.footerHtml}</footer>` : ''}
+      </section>
+    `;
+    })
     .join('\n');
 
-  const metadataHtml = Object.entries(document.metadata)
-    .map(([key, value]) => `<li><strong>${escapeHtml(toLabel(key))}:</strong> ${escapeHtml(value)}</li>`)
-    .join('');
   return `<!doctype html>
 <html lang="en">
   <head>
@@ -48,22 +100,140 @@ export function renderCanonicalHtml(document: CanonicalDocument): string {
     <title>${escapeHtml(document.title)}</title>
     <style>
       body { font-family: Georgia, serif; margin: 40px auto; max-width: 860px; line-height: 1.55; padding: 0 16px; }
-      h1 { border-bottom: 1px solid #ddd; padding-bottom: 12px; }
-      section { margin: 28px 0; page-break-inside: avoid; }
-      .chapter-body { margin-top: 12px; }
-      .chapter-body img { max-width: 100%; height: auto; display: block; }
-      .meta { color: #666; font-size: 0.9rem; }
-      .meta-list { color: #444; font-size: 0.95rem; }
+      section { margin: 28px 0; page-break-inside: avoid; border-bottom: 1px solid #eee; padding-bottom: 20px; }
+      section:last-of-type { border-bottom: none; }
+      .section-header { margin-bottom: 12px; }
+      .section-body img { max-width: 100%; height: auto; display: block; }
+      .section-footer { margin-top: 12px; color: #666; font-size: 0.9rem; }
+      .cc-meta-list, .cc-index-list { margin: 0.5rem 0; padding-left: 1.25rem; }
+      .cc-label { color: #666; font-size: 0.95rem; }
+      .cc-index-title { font-weight: 700; font-size: 1.1rem; }
     </style>
   </head>
   <body>
-    <h1>${escapeHtml(document.title)}</h1>
-    <p class="meta">Source domain: ${escapeHtml(document.sourceDomain)}</p>
-    <p class="meta">Generated at: ${escapeHtml(document.generatedAt)}</p>
-    ${metadataHtml ? `<ul class="meta-list">${metadataHtml}</ul>` : ''}
-    ${chapterHtml}
+    ${pageHtml}
   </body>
 </html>`;
+}
+
+function buildStructuredPages(document: CanonicalDocument, layout: ExportLayout): StructuredPage[] {
+  const pages: StructuredPage[] = [];
+
+  pages.push({
+    kind: 'cover',
+    title: document.title,
+    headerHtml: renderTemplateElements(layout.coverPage.header, document),
+    bodyHtml: renderTemplateElements(layout.coverPage.body, document),
+    footerHtml: renderTemplateElements(layout.coverPage.footer, document)
+  });
+
+  if (!layout.skipIndexPage) {
+    pages.push({
+      kind: 'index',
+      title: 'Index',
+      headerHtml: renderTemplateElements(layout.indexPage.header, document),
+      bodyHtml: renderTemplateElements(layout.indexPage.body, document),
+      footerHtml: renderTemplateElements(layout.indexPage.footer, document)
+    });
+  }
+
+  for (const chapter of document.chapters) {
+    pages.push({
+      kind: 'content',
+      title: chapter.title,
+      sourceUrl: chapter.sourceUrl,
+      headerHtml: renderTemplateElements(layout.contentPage.header, document, chapter),
+      bodyHtml: renderTemplateElements(layout.contentPage.body, document, chapter),
+      footerHtml: renderTemplateElements(layout.contentPage.footer, document, chapter)
+    });
+  }
+
+  return pages;
+}
+
+function renderTemplateElements(elements: ExportPageElement[], document: CanonicalDocument, chapter?: CanonicalDocument['chapters'][number]): string {
+  return elements
+    .map((element) => renderElementValue(element, document, chapter))
+    .filter((value) => value.trim().length > 0)
+    .join('\n');
+}
+
+function renderElementValue(element: ExportPageElement, document: CanonicalDocument, chapter?: CanonicalDocument['chapters'][number]): string {
+  if (element === 'document.title') {
+    return `<h1>${escapeHtml(document.title)}</h1>`;
+  }
+  if (element === 'document.sourceDomain') {
+    return `<p class="cc-label">Source domain: ${escapeHtml(document.sourceDomain)}</p>`;
+  }
+  if (element === 'document.generatedAt') {
+    return `<p class="cc-label">Generated at: ${escapeHtml(document.generatedAt)}</p>`;
+  }
+  if (element === 'metadata.list') {
+    const metadataHtml = Object.entries(document.metadata)
+      .map(([key, value]) => `<li><strong>${escapeHtml(toLabel(key))}:</strong> ${escapeHtml(value)}</li>`)
+      .join('');
+    return metadataHtml ? `<ul class="cc-meta-list">${metadataHtml}</ul>` : '';
+  }
+  if (element.startsWith('metadata.')) {
+    const key = element.slice('metadata.'.length);
+    const value = document.metadata[key];
+    return value ? `<p><strong>${escapeHtml(toLabel(key))}:</strong> ${escapeHtml(value)}</p>` : '';
+  }
+  if (element === 'index.chapterList') {
+    const items = document.chapters
+      .map((chapter, index) => `<li>${index + 1}. ${escapeHtml(chapter.title)}</li>`)
+      .join('');
+    return `<ol class="cc-index-list">${items}</ol>`;
+  }
+  if (element === 'chapter.title') {
+    return chapter ? `<h2>${escapeHtml(chapter.title)}</h2>` : '';
+  }
+  if (element === 'chapter.sourceUrl') {
+    return chapter ? `<p class="cc-label">Source URL: ${escapeHtml(chapter.sourceUrl)}</p>` : '';
+  }
+  if (element === 'chapter.bodyHtml') {
+    return chapter ? `<div class="chapter-body">${renderChapterBody(chapter.bodyHtml)}</div>` : '';
+  }
+  if (element.startsWith('chapter.metadata.')) {
+    const key = element.slice('chapter.metadata.'.length);
+    const value = chapter?.metadata?.[key];
+    return value ? `<p><strong>${escapeHtml(toLabel(key))}:</strong> ${escapeHtml(value)}</p>` : '';
+  }
+  if (element === 'label.index') {
+    return '<p class="cc-index-title">Index</p>';
+  }
+
+  return '';
+}
+
+function sanitizeExportLayout(candidate?: ExportLayout): ExportLayout {
+  if (!candidate) {
+    return defaultExportLayout;
+  }
+
+  return {
+    skipIndexPage: Boolean(candidate.skipIndexPage),
+    coverPage: sanitizeTemplate(candidate.coverPage, defaultExportLayout.coverPage),
+    indexPage: sanitizeTemplate(candidate.indexPage, defaultExportLayout.indexPage),
+    contentPage: sanitizeTemplate(candidate.contentPage, defaultExportLayout.contentPage)
+  };
+}
+
+function sanitizeTemplate(candidate: ExportPageTemplate | undefined, fallback: ExportPageTemplate): ExportPageTemplate {
+  return {
+    header: sanitizeElements(candidate?.header, fallback.header),
+    body: sanitizeElements(candidate?.body, fallback.body),
+    footer: sanitizeElements(candidate?.footer, fallback.footer)
+  };
+}
+
+function sanitizeElements(candidate: unknown, fallback: string[]): string[] {
+  if (!Array.isArray(candidate)) {
+    return fallback;
+  }
+
+  const cleaned = candidate.filter((value): value is string => typeof value === 'string' && value.trim().length > 0);
+  return cleaned.length > 0 ? cleaned : fallback;
 }
 
 function renderChapterBody(bodyHtml: string): string {
@@ -101,18 +271,18 @@ export function renderEpubLikeManifest(document: CanonicalDocument): string {
 }
 
 export async function runExportPipeline(options: ExportPipelineOptions): Promise<ExportArtifact[]> {
-  const { document, outputHtmlPath, outputPdfPath, outputEpubPath, outputEpubManifestPath } = options;
+  const { document, outputHtmlPath, outputPdfPath, outputEpubPath, outputEpubManifestPath, exportLayout } = options;
 
   const artifacts: ExportArtifact[] = [];
 
   if (outputHtmlPath) {
-    const html = renderCanonicalHtml(document);
+    const html = renderCanonicalHtml(document, exportLayout);
     await writeTextFile(outputHtmlPath, html);
     artifacts.push({ format: 'html', path: outputHtmlPath });
   }
 
   if (outputPdfPath) {
-    await renderPdfFromCanonicalDocument({ document, outputPdfPath });
+    await renderPdfFromCanonicalDocument({ document, outputPdfPath, exportLayout });
     artifacts.push({ format: 'pdf', path: outputPdfPath });
   }
 
@@ -123,7 +293,7 @@ export async function runExportPipeline(options: ExportPipelineOptions): Promise
   }
 
   if (outputEpubPath) {
-    await renderEpubFromCanonicalDocument({ document, outputEpubPath });
+    await renderEpubFromCanonicalDocument({ document, outputEpubPath, exportLayout });
     artifacts.push({ format: 'epub', path: outputEpubPath });
   }
 
@@ -139,10 +309,11 @@ async function writeTextFile(path: string, content: string): Promise<void> {
 async function renderPdfFromCanonicalDocument(params: {
   document: CanonicalDocument;
   outputPdfPath: string;
+  exportLayout?: ExportLayout;
 }): Promise<void> {
-  const { document, outputPdfPath } = params;
+  const { document, outputPdfPath, exportLayout } = params;
 
-  const html = renderCanonicalHtml(document);
+  const html = renderCanonicalHtml(document, exportLayout);
   const playwrightModuleName = 'playwright';
   const playwrightModule = (await import(/* @vite-ignore */ playwrightModuleName)) as { chromium: { launch: (opts: { headless: boolean }) => Promise<any> } };
 
@@ -169,8 +340,9 @@ async function renderPdfFromCanonicalDocument(params: {
 async function renderEpubFromCanonicalDocument(params: {
   document: CanonicalDocument;
   outputEpubPath: string;
+  exportLayout?: ExportLayout;
 }): Promise<void> {
-  const { document, outputEpubPath } = params;
+  const { document, outputEpubPath, exportLayout } = params;
 
   try {
     const epubModuleName = 'epub-gen';
@@ -187,10 +359,14 @@ async function renderEpubFromCanonicalDocument(params: {
       output: string
     ) => { promise?: Promise<unknown> };
 
-    const content = await prepareEpubContent(document.chapters.map((chapter) => ({
-      title: chapter.title,
-      bodyHtml: renderChapterBody(chapter.bodyHtml)
-    })));
+    const layout = sanitizeExportLayout(exportLayout);
+    const structuredPages = buildStructuredPages(document, layout);
+    const content = await prepareEpubContent(
+      structuredPages.map((page) => ({
+        title: page.title,
+        bodyHtml: [page.headerHtml, page.bodyHtml, page.footerHtml].filter(Boolean).join('\n')
+      }))
+    );
 
     const unresolvedDataUrlCount = content.reduce(
       (count, chapter) => count + (chapter.data.match(/data:image\//gi)?.length ?? 0),
@@ -324,21 +500,47 @@ async function replaceDataImageUrls(
   return updatedHtml;
 }
 
-function parseDataImageUrl(dataUrl: string): { data: Uint8Array; extension: string } | null {
-  const match = dataUrl.match(/^data:image\/([\w.+-]+)(?:;[^;,=]+=[^;,]+)*(?:;base64),(.+)$/i);
+function parseDataImageUrl(dataUrl: string): { extension: string; data: Uint8Array } | null {
+  const match = /^data:image\/([a-zA-Z0-9.+-]+);base64,(.+)$/i.exec(dataUrl);
   if (!match) {
     return null;
   }
 
-  const extension = match[1].toLowerCase() === 'jpeg' ? 'jpg' : match[1].toLowerCase();
-  const nodeBuffer = (globalThis as { Buffer?: { from: (value: string, encoding: 'base64') => Uint8Array } }).Buffer;
-  if (!nodeBuffer) {
-    return null;
+  const extension = normalizeImageExtension(match[1]);
+  const data = decodeBase64ToBytes(match[2]);
+  return { extension, data };
+}
+
+function decodeBase64ToBytes(value: string): Uint8Array {
+  const bufferConstructor = (globalThis as { Buffer?: { from: (input: string, encoding: string) => Uint8Array } }).Buffer;
+  if (bufferConstructor) {
+    return bufferConstructor.from(value, 'base64');
   }
 
-  const bytes = nodeBuffer.from(match[2], 'base64');
-  return { data: new Uint8Array(bytes), extension };
+  const decoder = (globalThis as { atob?: (input: string) => string }).atob;
+  if (!decoder) {
+    throw new Error('Base64 decoder is unavailable in the current runtime.');
+  }
+
+  const binary = decoder(value);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+
+  return bytes;
 }
+
+function normalizeImageExtension(mediaTypePart: string): string {
+  const value = mediaTypePart.toLowerCase();
+
+  if (value === 'jpeg') {
+    return 'jpg';
+  }
+
+  return value;
+}
+
 function escapeHtml(value: string): string {
   return value
     .replaceAll('&', '&amp;')

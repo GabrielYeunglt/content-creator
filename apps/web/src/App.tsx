@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { ExportFormatManagerPanel } from './components/ExportFormatManagerPanel';
 import { JobProfileManagerPanel } from './components/JobProfileManagerPanel';
 import { ProfileManagerPanel } from './components/ProfileManagerPanel';
 import { ResultsPanel } from './components/ResultsPanel';
@@ -11,12 +12,19 @@ import type { JobProfile } from './types/jobProfile';
 import type { JobRecord } from './types/job';
 import type { WebsiteProfile } from './types/profile';
 
-type AppSection = 'start-job' | 'profile-manager' | 'job-profile-manager' | 'settings' | 'results';
+type AppSection =
+  | 'start-job'
+  | 'profile-manager'
+  | 'job-profile-manager'
+  | 'export-format-manager'
+  | 'settings'
+  | 'results';
 
 const sections: Array<{ id: AppSection; label: string }> = [
   { id: 'start-job', label: 'Start Job' },
   { id: 'profile-manager', label: 'Profile Manager' },
   { id: 'job-profile-manager', label: 'Job Profile Manager' },
+  { id: 'export-format-manager', label: 'Export Format Manager' },
   { id: 'settings', label: 'Settings' },
   { id: 'results', label: 'Results' }
 ];
@@ -73,6 +81,7 @@ export function App() {
         />
       )}
       {activeSection === 'settings' && <SettingsPanel />}
+      {activeSection === 'export-format-manager' && <ExportFormatManagerPanel jobs={jobs} />}
       {activeSection === 'job-profile-manager' && (
         <JobProfileManagerPanel websiteProfiles={profiles} onJobProfilesChanged={setJobProfiles} />
       )}
