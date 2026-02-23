@@ -22,6 +22,9 @@ export function ProfileList({ profiles, onCreateNew, onEdit, onDelete }: Profile
             <strong>{profile.name}</strong> — {profile.domain}
           </p>
           <p>
+            Mode: <code>{profile.profileType ?? 'single-url'}</code>
+          </p>
+          <p>
             Content selector: <code>{profile.selectorRules[0]?.selectorType}</code> <code>{profile.selectorRules[0]?.selector}</code>
           </p>
           <p>
@@ -37,6 +40,9 @@ export function ProfileList({ profiles, onCreateNew, onEdit, onDelete }: Profile
             Total-pages rule: {profile.totalPagesRule?.selector ? <code>{profile.totalPagesRule.selector}</code> : 'not set'}
           </p>
           <p>Optional metadata extractions: {profile.metadataRules?.length ?? 0}</p>
+          {profile.profileType === 'multi-url' && (
+            <p>Metadata overrides: {Object.values(profile.multiUrlOverrides ?? {}).filter((value) => Boolean(value?.trim())).length}</p>
+          )}
           <div style={{ display: 'flex', gap: '0.5rem' }}>
             <button type="button" onClick={() => onEdit(profile.id)}>
               Edit
