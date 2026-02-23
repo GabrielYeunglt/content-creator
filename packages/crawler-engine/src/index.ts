@@ -101,6 +101,7 @@ type RequestLike = {
 
 type PlaywrightPageLike = {
   goto: (url: string, opts: { waitUntil: 'commit' | 'domcontentloaded' | 'networkidle'; timeout: number }) => Promise<void>;
+  reload: (opts: { waitUntil: 'commit' | 'domcontentloaded' | 'networkidle'; timeout: number }) => Promise<void>;
   on: (event: 'requestfinished', handler: (request: RequestLike) => void) => void;
   off: (event: 'requestfinished', handler: (request: RequestLike) => void) => void;
   evaluate: <TResult, TArg = undefined>(fn: (arg: TArg) => TResult | Promise<TResult>, arg?: TArg) => Promise<TResult>;
@@ -177,6 +178,14 @@ function stripHash(url: string): string {
   } catch {
     return url;
   }
+}
+
+function isHashOnlyNavigation(previousUrl: string | null, nextUrl: string): boolean {
+  if (!previousUrl || previousUrl === nextUrl) {
+    return false;
+  }
+
+  return stripHash(previousUrl) === stripHash(nextUrl);
 }
 
 async function extractRuleValue(
@@ -441,6 +450,7 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
   let totalPagesTarget: number | null = null;
   let consecutiveErrors = 0;
   let previousExtractedValue: string | null = null;
+  let previousNavigatedUrl: string | null = null;
 
   const maxRetriesPerPage = Math.max(0, stopRules.maxRetriesPerPage ?? 1);
   const retryBackoffMs = Math.max(0, stopRules.retryBackoffMs ?? 750);
@@ -485,6 +495,11 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
           try {
             console.log(`[crawl] navigating to ${currentUrl} attempt=${attempt}`);
             await page.goto(currentUrl, { waitUntil: navigationWaitUntil, timeout: timeoutMs });
+
+            if (paginationRule.navigationMode === 'url-pattern' && isHashOnlyNavigation(previousNavigatedUrl, currentUrl)) {
+              await page.reload({ waitUntil: 'domcontentloaded', timeout: timeoutMs });
+            }
+
             if (postNavigationDelayMs > 0) {
               await page.waitForTimeout(postNavigationDelayMs);
             }
@@ -505,6 +520,7 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
             }
 
             visited.add(currentUrl);
+            previousNavigatedUrl = currentUrl;
             console.log(`[crawl] navigation succeeded and marked visited ${currentUrl}`);
             break;
           } catch (error) {
@@ -526,11 +542,7 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
         let extractedValue = await extractRuleValue(page, contentRule);
 
         const previousPageUrl = pages.at(-1)?.url;
-        const sameDocumentHashNavigation = Boolean(
-          previousPageUrl
-          && stripHash(previousPageUrl) === stripHash(currentUrl)
-          && previousPageUrl !== currentUrl
-        );
+        const sameDocumentHashNavigation = isHashOnlyNavigation(previousPageUrl ?? null, currentUrl);
 
         if (
           sameDocumentHashNavigation
