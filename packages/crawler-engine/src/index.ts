@@ -168,6 +168,68 @@ function toAbsoluteUrl(baseUrl: string, value: string): string | null {
 }
 
 
+
+function stripHash(url: string): string {
+  try {
+    const parsed = new URL(url);
+    parsed.hash = '';
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+}
+
+async function extractRuleValue(
+  page: PlaywrightPageLike,
+  rule: Pick<CrawlSelectorRule, 'selectorType' | 'selector' | 'extractMode' | 'attributeName'>
+): Promise<string | null> {
+  return page.evaluate(
+    ({ selectorType, selector, extractMode, attributeName }) => {
+      let firstNode: Node | null = null;
+      try {
+        firstNode = selectorType === 'css'
+          ? document.querySelector(selector)
+          : document.evaluate(selector, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+      } catch {
+        return null;
+      }
+
+      if (!firstNode || !(firstNode instanceof Element)) return null;
+      if (extractMode === 'html') return firstNode.innerHTML.trim();
+      if (extractMode === 'text') return (firstNode.textContent ?? '').trim();
+      const attr = (attributeName ?? 'href').trim();
+      return firstNode.getAttribute(attr)?.trim() ?? '';
+    },
+    rule
+  );
+}
+
+async function waitForDifferentRuleValue(params: {
+  page: PlaywrightPageLike;
+  rule: Pick<CrawlSelectorRule, 'selectorType' | 'selector' | 'extractMode' | 'attributeName'>;
+  previousValue: string;
+  timeoutMs: number;
+}): Promise<string | null> {
+  const { page, rule, previousValue, timeoutMs } = params;
+  const startedAt = Date.now();
+  let latestValue = previousValue;
+
+  while (Date.now() - startedAt < timeoutMs) {
+    await page.waitForTimeout(200);
+    const candidate = await extractRuleValue(page, rule);
+
+    if (candidate && candidate !== previousValue) {
+      return candidate;
+    }
+
+    if (candidate) {
+      latestValue = candidate;
+    }
+  }
+
+  return latestValue;
+}
+
 function resolveUrlPatternNext(currentUrl: string): string | null {
   try {
     const url = new URL(currentUrl);
@@ -378,6 +440,7 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
   let currentUrl: string | null = startUrl;
   let totalPagesTarget: number | null = null;
   let consecutiveErrors = 0;
+  let previousExtractedValue: string | null = null;
 
   const maxRetriesPerPage = Math.max(0, stopRules.maxRetriesPerPage ?? 1);
   const retryBackoffMs = Math.max(0, stopRules.retryBackoffMs ?? 750);
@@ -460,25 +523,27 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
           }
         }
 
-        const extractedValue = await page.evaluate(
-          ({ selectorType, selector, extractMode, attributeName }) => {
-            let firstNode: Node | null = null;
-            try {
-              firstNode = selectorType === 'css'
-                ? document.querySelector(selector)
-                : document.evaluate(selector, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
-            } catch {
-              return null;
-            }
+        let extractedValue = await extractRuleValue(page, contentRule);
 
-            if (!firstNode || !(firstNode instanceof Element)) return null;
-            if (extractMode === 'html') return firstNode.innerHTML.trim();
-            if (extractMode === 'text') return (firstNode.textContent ?? '').trim();
-            const attr = (attributeName ?? 'href').trim();
-            return firstNode.getAttribute(attr)?.trim() ?? '';
-          },
-          contentRule
+        const previousPageUrl = pages.at(-1)?.url;
+        const sameDocumentHashNavigation = Boolean(
+          previousPageUrl
+          && stripHash(previousPageUrl) === stripHash(currentUrl)
+          && previousPageUrl !== currentUrl
         );
+
+        if (
+          sameDocumentHashNavigation
+          && previousExtractedValue
+          && extractedValue === previousExtractedValue
+        ) {
+          extractedValue = await waitForDifferentRuleValue({
+            page,
+            rule: contentRule,
+            previousValue: previousExtractedValue,
+            timeoutMs
+          });
+        }
 
         console.log(`[crawl] extracted raw value length=${extractedValue ? String(extractedValue).length : 0}`);
         const content = await resolveContentValue({
@@ -498,25 +563,7 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
             continue;
           }
 
-          const extractedMetadata = await page.evaluate(
-            ({ selectorType, selector, extractMode, attributeName }) => {
-              let firstNode: Node | null = null;
-              try {
-                firstNode = selectorType === 'css'
-                  ? document.querySelector(selector)
-                  : document.evaluate(selector, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
-              } catch {
-                return '';
-              }
-
-              if (!firstNode || !(firstNode instanceof Element)) return '';
-              if (extractMode === 'html') return firstNode.innerHTML.trim();
-              if (extractMode === 'text') return (firstNode.textContent ?? '').trim();
-              const attr = (attributeName ?? 'href').trim();
-              return firstNode.getAttribute(attr)?.trim() ?? '';
-            },
-            rule
-          );
+          const extractedMetadata = await extractRuleValue(page, rule);
 
           const resolvedMetadataValue = await resolveContentValue({
             page,
@@ -563,6 +610,7 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
         });
 
         console.log(`[crawl] page saved url=${currentUrl} stylesheets=${domAssets.stylesheets.length}+${networkStylesheets.size} scripts=${domAssets.scripts.length}+${networkScripts.size}`);
+        previousExtractedValue = extractedValue;
 
         consecutiveErrors = 0;
 
