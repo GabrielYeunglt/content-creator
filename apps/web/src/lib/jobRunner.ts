@@ -172,6 +172,8 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
       scripts: item.scripts
     }));
 
+    console.log('Crawl result:', { ...result, pages: result.pages.map((p) => ({ url: p.url, metadata: p.metadata })) });
+
     const consolidated = buildCanonicalDocument({
       jobId,
       profileName: profile.name,

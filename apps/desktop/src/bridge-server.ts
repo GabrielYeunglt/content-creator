@@ -130,7 +130,9 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     return;
   }
 
-  console.log(`[desktop-bridge] request start ${req.method} ${req.url}`);
+  if (!(req.method === 'GET' && req.url === '/health')) {
+    console.log(`[desktop-bridge] request start ${req.method} ${req.url}`);
+  }
 
   if (req.method === 'OPTIONS') {
     sendJson(res, 204, { ok: true });
@@ -138,7 +140,6 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
   }
 
   if (req.method === 'GET' && req.url === '/health') {
-    console.log('[desktop-bridge] handling health check request');
     sendJson(res, 200, { ok: true, service: 'content-creator-desktop-bridge' });
     return;
   }

@@ -355,6 +355,8 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
     totalPagesRule
   } = options;
 
+  console.log('Starting crawl with options:', options);
+
   const visited = new Set<string>();
   const pages: CrawledPage[] = [];
   const errors: CrawlErrorRecord[] = [];
@@ -364,6 +366,14 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
   notes.push(
     `Pagination mode: ${paginationRule.navigationMode ?? 'url-attribute'}; page.goto waitUntil=${navigationWaitUntil}; post-navigation wait=${postNavigationDelayMs}ms.`
   );
+
+  console.log('[crawl] start', {
+    startUrl,
+    domain,
+    paginationMode: paginationRule.navigationMode ?? 'url-attribute',
+    timeoutMs,
+    stopRules
+  });
 
   let currentUrl: string | null = startUrl;
   let totalPagesTarget: number | null = null;
@@ -378,16 +388,20 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
 
   try {
     while (currentUrl) {
+      console.log(`[crawl] loop start currentUrl=${currentUrl} pages=${pages.length}`);
       if (visited.has(currentUrl)) {
+        console.log(`[crawl] already-visited-url ${currentUrl}`);
         return { pagesProcessed: pages.length, stopReason: 'already-visited-url', pages, errors, notes };
       }
 
       if (pages.length >= Math.max(1, stopRules.maxPages)) {
+        console.log(`[crawl] max-pages-reached ${pages.length} >= ${stopRules.maxPages}`);
         return { pagesProcessed: pages.length, stopReason: 'max-pages-reached', pages, errors, notes };
       }
 
       const host = normalizedHost(currentUrl);
       if (!host || host !== domain.replace(/^www\./, '').toLowerCase()) {
+        console.log(`[crawl] out-of-domain-blocked host=${host} expected=${domain}`);
         return { pagesProcessed: pages.length, stopReason: 'out-of-domain-blocked', pages, errors, notes };
       }
 
@@ -406,6 +420,7 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
       try {
         for (let attempt = 1; attempt <= maxRetriesPerPage + 1; attempt += 1) {
           try {
+            console.log(`[crawl] navigating to ${currentUrl} attempt=${attempt}`);
             await page.goto(currentUrl, { waitUntil: navigationWaitUntil, timeout: timeoutMs });
             if (postNavigationDelayMs > 0) {
               await page.waitForTimeout(postNavigationDelayMs);
@@ -427,10 +442,12 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
             }
 
             visited.add(currentUrl);
+            console.log(`[crawl] navigation succeeded and marked visited ${currentUrl}`);
             break;
           } catch (error) {
             const message = error instanceof Error ? error.message : 'Unknown crawl attempt error';
             errors.push({ url: currentUrl, attempt, error: message });
+            console.log(`[crawl] navigation attempt error url=${currentUrl} attempt=${attempt} error=${message}`);
 
             if (attempt > maxRetriesPerPage) {
               exhaustedRetries = true;
@@ -463,6 +480,7 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
           contentRule
         );
 
+        console.log(`[crawl] extracted raw value length=${extractedValue ? String(extractedValue).length : 0}`);
         const content = await resolveContentValue({
           page,
           baseUrl: currentUrl,
@@ -470,6 +488,8 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
           extractedValue,
           timeoutMs
         });
+
+        console.log(`[crawl] resolved content length=${content ? content.length : 0}`);
 
         const metadata: Record<string, string> = {};
         for (const rule of metadataRules) {
@@ -506,6 +526,7 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
             timeoutMs
           });
 
+          console.log(`[crawl] metadata ${metadataKey} length=${resolvedMetadataValue ? resolvedMetadataValue.length : 0}`);
           if (resolvedMetadataValue.trim()) {
             metadata[metadataKey] = resolvedMetadataValue;
           }
@@ -541,6 +562,8 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
           metadata
         });
 
+        console.log(`[crawl] page saved url=${currentUrl} stylesheets=${domAssets.stylesheets.length}+${networkStylesheets.size} scripts=${domAssets.scripts.length}+${networkScripts.size}`);
+
         consecutiveErrors = 0;
 
         if (totalPagesRule && totalPagesTarget === null) {
@@ -548,11 +571,13 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
           if (extractedTotalPages !== null) {
             totalPagesTarget = extractedTotalPages;
             notes.push(`Total pages target extracted: ${extractedTotalPages}.`);
+            console.log(`[crawl] total pages target extracted=${extractedTotalPages}`);
           }
         }
 
         if (totalPagesTarget !== null && pages.length >= totalPagesTarget) {
           notes.push(`Reached extracted total pages target (${totalPagesTarget}).`);
+          console.log(`[crawl] reached total-pages-target ${totalPagesTarget}`);
           return { pagesProcessed: pages.length, stopReason: 'total-pages-reached', pages, errors, notes };
         }
 
@@ -562,7 +587,9 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
           paginationRule,
           timeoutMs
         });
+        console.log(`[crawl] resolved next url from ${currentUrl} => ${resolvedNext}`);
         if (!resolvedNext) {
+          console.log(`[crawl] no-next-button at ${currentUrl}`);
           return { pagesProcessed: pages.length, stopReason: 'no-next-button', pages, errors, notes };
         }
 
@@ -571,11 +598,13 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
         consecutiveErrors += 1;
         const message = error instanceof Error ? error.message : 'Unknown crawl processing error';
 
+        console.log(`[crawl] processing error url=${currentUrl} message=${message} exhaustedRetries=${exhaustedRetries}`);
         if (!exhaustedRetries) {
           errors.push({ url: currentUrl, attempt: maxRetriesPerPage + 1, error: message });
         }
 
         if (consecutiveErrors >= Math.max(1, stopRules.maxConsecutiveErrors)) {
+          console.log(`[crawl] error-threshold-reached consecutiveErrors=${consecutiveErrors}`);
           return { pagesProcessed: pages.length, stopReason: 'error-threshold-reached', pages, errors, notes };
         }
       } finally {
@@ -583,8 +612,10 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
       }
     }
 
+    console.log('[crawl] finished main loop, returning no-next-button');
     return { pagesProcessed: pages.length, stopReason: 'no-next-button', pages, errors, notes };
   } finally {
+    console.log('[crawl] closing browser context and browser');
     await context.close();
     await browser.close();
   }
