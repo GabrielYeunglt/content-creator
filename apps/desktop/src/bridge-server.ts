@@ -45,6 +45,7 @@ async function readJson<T>(req: IncomingMessage): Promise<T> {
   }
 
   const text = Buffer.concat(chunks).toString('utf-8').trim();
+  console.log(`[desktop-bridge] received ${req.method ?? 'UNKNOWN'} ${req.url ?? '<missing-url>'} payload (${text.length} chars)`);
   if (!text) {
     throw new Error('Request body is empty.');
   }
@@ -86,6 +87,9 @@ function coerceCrawlOptions(value: unknown): VirtualBrowserCrawlOptions {
 }
 
 async function handleExport(request: ExportRequest): Promise<{ artifacts: ExportArtifact[] }> {
+  console.log(
+    `[desktop-bridge] preparing export for job=${request.jobId} format=${request.format} pages=${request.pages.length}`
+  );
   await mkdir(artifactRoot, { recursive: true });
 
   const canonical = buildCanonicalDocument({
@@ -102,6 +106,9 @@ async function handleExport(request: ExportRequest): Promise<{ artifacts: Export
   });
 
   const paths = createArtifactPaths(request);
+  console.log(
+    `[desktop-bridge] export output paths html=${paths.htmlPath ?? 'n/a'} pdf=${paths.pdfPath ?? 'n/a'} epub=${paths.epubPath ?? 'n/a'}`
+  );
   const artifacts = await runExportPipeline({
     document: canonical,
     outputHtmlPath: paths.htmlPath,
@@ -123,36 +130,47 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     return;
   }
 
+  console.log(`[desktop-bridge] request start ${req.method} ${req.url}`);
+
   if (req.method === 'OPTIONS') {
     sendJson(res, 204, { ok: true });
     return;
   }
 
   if (req.method === 'GET' && req.url === '/health') {
+    console.log('[desktop-bridge] handling health check request');
     sendJson(res, 200, { ok: true, service: 'content-creator-desktop-bridge' });
     return;
   }
 
   if (req.method === 'POST' && req.url === '/crawl') {
     const body = await readJson<unknown>(req);
+    console.log('[desktop-bridge] running crawl request');
     const result = await crawlWithVirtualBrowser(coerceCrawlOptions(body));
+    console.log(
+      `[desktop-bridge] crawl completed pages=${result.pages.length} errors=${result.errors.length} notes=${result.notes.length}`
+    );
     sendJson(res, 200, result);
     return;
   }
 
   if (req.method === 'POST' && req.url === '/export') {
     const body = await readJson<ExportRequest>(req);
+    console.log(`[desktop-bridge] running export request for job=${body.jobId}`);
     const result = await handleExport(body);
+    console.log(`[desktop-bridge] export completed artifacts=${result.artifacts.length}`);
     sendJson(res, 200, result);
     return;
   }
 
+  console.warn(`[desktop-bridge] route not found ${req.method} ${req.url}`);
   sendJson(res, 404, { error: 'Not found.' });
 }
 
 const server = createServer((req, res) => {
   route(req, res).catch((error) => {
     const message = error instanceof Error ? error.message : 'Unknown server error';
+    console.error(`[desktop-bridge] request failed ${req.method ?? 'UNKNOWN'} ${req.url ?? '<missing-url>'}: ${message}`);
     sendJson(res, 500, { error: message });
   });
 });
