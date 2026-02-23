@@ -34,7 +34,7 @@ export type PaginationRule = {
   selectorType: SelectorType;
   selector: string;
   attributeName: string;
-  navigationMode?: 'url-attribute' | 'click';
+  navigationMode?: 'url-attribute' | 'click' | 'url-pattern';
 };
 
 export type TotalPagesRule = {
@@ -82,7 +82,7 @@ export type ExtractionRuleDraft = {
   required?: boolean;
   fieldType?: MetadataFieldType;
   customFieldName?: string;
-  navigationMode?: 'url-attribute' | 'click';
+  navigationMode?: 'url-attribute' | 'click' | 'url-pattern';
 };
 
 export const defaultSelectorRule: SelectorRule = {

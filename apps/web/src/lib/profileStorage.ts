@@ -54,7 +54,11 @@ function sanitizeProfile(candidate: Partial<WebsiteProfile>): WebsiteProfile | n
         : 'css',
       selector: candidate.paginationRule.selector.trim(),
       attributeName: candidate.paginationRule.attributeName?.trim() || 'href',
-      navigationMode: candidate.paginationRule.navigationMode === 'click' ? 'click' : 'url-attribute'
+      navigationMode: candidate.paginationRule.navigationMode === 'click'
+        ? 'click'
+        : candidate.paginationRule.navigationMode === 'url-pattern'
+          ? 'url-pattern'
+          : 'url-attribute'
     },
     totalPagesRule: candidate.totalPagesRule && candidate.totalPagesRule.selector?.trim()
       ? {
@@ -85,7 +89,17 @@ function validateProfileDraft(draft: ProfileDraft): { ok: true } | { ok: false; 
   }
 
   const invalidRequiredRule = draft.extractionRules.find(
-    (rule) => rule.showByDefault && !rule.optional && !rule.selector.trim()
+    (rule) => {
+      if (!rule.showByDefault || rule.optional) {
+        return false;
+      }
+
+      if (rule.type === 'pagination' && rule.navigationMode === 'url-pattern') {
+        return false;
+      }
+
+      return !rule.selector.trim();
+    }
   );
   if (invalidRequiredRule) {
     return { ok: false, error: `${invalidRequiredRule.label} selector is required.` };
