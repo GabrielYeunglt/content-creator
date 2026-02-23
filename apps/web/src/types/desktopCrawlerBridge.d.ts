@@ -68,6 +68,7 @@ declare global {
         url: string;
         content?: string;
         preview: string;
+        metadata?: Record<string, string>;
         stylesheets?: string[];
         scripts?: string[];
       }>;

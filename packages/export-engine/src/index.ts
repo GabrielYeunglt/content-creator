@@ -233,7 +233,7 @@ function sanitizeElements(candidate: unknown, fallback: string[]): string[] {
   }
 
   const cleaned = candidate.filter((value): value is string => typeof value === 'string' && value.trim().length > 0);
-  return cleaned.length > 0 ? cleaned : fallback;
+  return cleaned;
 }
 
 function renderChapterBody(bodyHtml: string): string {
@@ -354,6 +354,8 @@ async function renderEpubFromCanonicalDocument(params: {
         cover?: string;
         description?: string;
         language?: string;
+        appendChapterTitles?: boolean;
+        customOpfTemplate?: string;
         content: Array<{ title: string; data: string }>;
       },
       output: string
@@ -376,14 +378,24 @@ async function renderEpubFromCanonicalDocument(params: {
       throw new Error(`EPUB content still contains ${unresolvedDataUrlCount} unresolved data:image URL(s) after asset replacement.`);
     }
 
+    const bookTitle = getMetadataValue(document, ['title', 'name']) || document.title;
+    const bookAuthor = getMetadataValue(document, ['author']) || document.sourceDomain;
+    const bookPublisher = getMetadataValue(document, ['publisher']);
+    const bookSeries = getMetadataValue(document, ['series']);
+    const bookDescription = getMetadataValue(document, ['description']);
+    const bookLanguage = getMetadataValue(document, ['language']);
+    const bookCover = getMetadataValue(document, ['cover']);
+
     const instance = new EpubConstructor(
       {
-        title: document.title,
-        author: document.metadata.author || document.sourceDomain,
-        publisher: document.metadata.publisher,
-        cover: document.metadata.cover,
-        description: document.metadata.description,
-        language: document.metadata.language,
+        title: bookTitle,
+        author: bookAuthor,
+        publisher: bookPublisher,
+        cover: bookCover,
+        description: bookDescription,
+        language: bookLanguage,
+        appendChapterTitles: false,
+        customOpfTemplate: buildCustomOpfTemplate({ series: bookSeries }),
         content
       },
       outputEpubPath
@@ -406,6 +418,33 @@ async function renderEpubFromCanonicalDocument(params: {
     ].join(' ');
     throw new Error(enrichedMessage);
   }
+}
+
+function getMetadataValue(document: CanonicalDocument, candidates: string[]): string | undefined {
+  const metadataEntries = Object.entries(document.metadata);
+
+  for (const key of candidates) {
+    const direct = document.metadata[key];
+    if (direct?.trim()) {
+      return direct.trim();
+    }
+
+    const lowerKey = key.toLowerCase();
+    const matched = metadataEntries.find(([metadataKey, value]) => metadataKey.toLowerCase() === lowerKey && value.trim());
+    if (matched) {
+      return matched[1].trim();
+    }
+  }
+
+  return undefined;
+}
+
+function buildCustomOpfTemplate(params: { series?: string }): string | undefined {
+  if (!params.series) {
+    return undefined;
+  }
+
+  return `<meta name="calibre:series" content="${escapeHtml(params.series)}"/>`;
 }
 
 
