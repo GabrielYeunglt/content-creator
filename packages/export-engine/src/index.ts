@@ -366,11 +366,13 @@ async function renderEpubFromCanonicalDocument(params: {
 
     const layout = sanitizeExportLayout(exportLayout);
     const structuredPages = buildStructuredPages(document, layout);
+    const assetDir = await createEpubAssetDirectory();
     const content = await prepareEpubContent(
       structuredPages.map((page) => ({
         title: page.title,
         bodyHtml: [page.headerHtml, page.bodyHtml, page.footerHtml].filter(Boolean).join('\n')
-      }))
+      })),
+      assetDir
     );
 
     const unresolvedDataUrlCount = content.reduce(
@@ -387,7 +389,7 @@ async function renderEpubFromCanonicalDocument(params: {
     const bookSeries = getMetadataValue(document, ['series']);
     const bookDescription = getMetadataValue(document, ['description']);
     const bookLanguage = getMetadataValue(document, ['language']);
-    const bookCover = resolveBookCover(document, layout.coverImageSource);
+    const bookCover = await resolveBookCover(document, layout.coverImageSource, assetDir);
 
     const instance = new EpubConstructor(
       {
@@ -423,15 +425,31 @@ async function renderEpubFromCanonicalDocument(params: {
   }
 }
 
-function resolveBookCover(document: CanonicalDocument, coverImageSource: ExportLayout['coverImageSource']): string | undefined {
+async function resolveBookCover(
+  document: CanonicalDocument,
+  coverImageSource: ExportLayout['coverImageSource'],
+  assetDir: string
+): Promise<string | undefined> {
+  const maybeDataUrlToPath = async (value: string | undefined): Promise<string | undefined> => {
+    if (!value) {
+      return undefined;
+    }
+
+    if (!/^data:image\//i.test(value)) {
+      return value;
+    }
+
+    return writeDataImageToAsset(value, assetDir, 'cover');
+  };
+
   if (coverImageSource === 'first-image-from-url') {
     const firstImage = findFirstImageInDocument(document);
     if (firstImage) {
-      return firstImage;
+      return maybeDataUrlToPath(firstImage);
     }
   }
 
-  return getMetadataValue(document, ['cover']);
+  return maybeDataUrlToPath(getMetadataValue(document, ['cover']));
 }
 
 function findFirstImageInDocument(document: CanonicalDocument): string | undefined {
@@ -522,8 +540,29 @@ function toLabel(key: string): string {
 }
 
 async function prepareEpubContent(
-  chapters: Array<{ title: string; bodyHtml: string }>
+  chapters: Array<{ title: string; bodyHtml: string }>,
+  assetDir: string
 ): Promise<Array<{ title: string; data: string }>> {
+  const cryptoModuleName = 'node:crypto';
+
+  const pathModuleName = 'node:path';
+  const fsModuleName = 'node:fs/promises';
+
+  const path = await import(/* @vite-ignore */ pathModuleName);
+  const fs = (await import(/* @vite-ignore */ fsModuleName)) as {
+    writeFile: (path: string, data: Uint8Array) => Promise<void>;
+  };
+  const { createHash } = await import(/* @vite-ignore */ cryptoModuleName);
+
+  return Promise.all(
+    chapters.map(async (chapter, chapterIndex) => ({
+      title: chapter.title,
+      data: await replaceDataImageUrls(chapter.bodyHtml, assetDir, chapterIndex, createHash, fs, path)
+    }))
+  );
+}
+
+async function createEpubAssetDirectory(): Promise<string> {
   const osModuleName = 'node:os';
   const pathModuleName = 'node:path';
   const fsModuleName = 'node:fs/promises';
@@ -533,19 +572,35 @@ async function prepareEpubContent(
   const path = await import(/* @vite-ignore */ pathModuleName);
   const fs = (await import(/* @vite-ignore */ fsModuleName)) as {
     mkdir: (path: string, options: { recursive: boolean }) => Promise<void>;
-    writeFile: (path: string, data: Uint8Array) => Promise<void>;
   };
-  const { createHash, randomUUID } = await import(/* @vite-ignore */ cryptoModuleName);
+  const { randomUUID } = await import(/* @vite-ignore */ cryptoModuleName);
 
   const assetDir = path.join(os.tmpdir(), 'content-creator-epub-assets', randomUUID());
   await fs.mkdir(assetDir, { recursive: true });
+  return assetDir;
+}
 
-  return Promise.all(
-    chapters.map(async (chapter, chapterIndex) => ({
-      title: chapter.title,
-      data: await replaceDataImageUrls(chapter.bodyHtml, assetDir, chapterIndex, createHash, fs, path)
-    }))
-  );
+async function writeDataImageToAsset(dataUrl: string, assetDir: string, prefix: string): Promise<string> {
+  const cryptoModuleName = 'node:crypto';
+  const pathModuleName = 'node:path';
+  const fsModuleName = 'node:fs/promises';
+
+  const { createHash } = await import(/* @vite-ignore */ cryptoModuleName);
+  const path = await import(/* @vite-ignore */ pathModuleName);
+  const fs = (await import(/* @vite-ignore */ fsModuleName)) as {
+    writeFile: (path: string, data: Uint8Array) => Promise<void>;
+  };
+
+  const parsed = parseDataImageUrl(dataUrl);
+  if (!parsed) {
+    return dataUrl;
+  }
+
+  const digest = createHash('sha1').update(dataUrl).digest('hex');
+  const fileName = `${prefix}-${digest.slice(0, 10)}.${parsed.extension}`;
+  const imagePath = path.join(assetDir, fileName);
+  await fs.writeFile(imagePath, parsed.data);
+  return imagePath;
 }
 
 async function replaceDataImageUrls(
