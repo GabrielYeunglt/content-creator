@@ -33,6 +33,10 @@ export function ProfileEditorForm({ mode, draft, onChange, onSave, onCancel }: P
   }
 
   function removeRule(ruleId: string) {
+    if (!window.confirm('Remove this extraction rule?')) {
+      return;
+    }
+
     onChange(
       'extractionRules',
       draft.extractionRules.filter((rule) => rule.id !== ruleId)

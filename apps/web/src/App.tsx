@@ -1,28 +1,34 @@
 import { useMemo, useState } from 'react';
+import { JobProfileManagerPanel } from './components/JobProfileManagerPanel';
 import { ProfileManagerPanel } from './components/ProfileManagerPanel';
 import { ResultsPanel } from './components/ResultsPanel';
 import { SettingsPanel } from './components/SettingsPanel';
 import { StartJobPanel } from './components/StartJobPanel';
 import { readJobs } from './lib/jobStorage';
+import { readJobProfiles } from './lib/jobProfileStorage';
 import { readProfiles } from './lib/profileStorage';
+import type { JobProfile } from './types/jobProfile';
 import type { JobRecord } from './types/job';
 import type { WebsiteProfile } from './types/profile';
 
-type AppSection = 'start-job' | 'profile-manager' | 'settings' | 'results';
+type AppSection = 'start-job' | 'profile-manager' | 'job-profile-manager' | 'settings' | 'results';
 
 const sections: Array<{ id: AppSection; label: string }> = [
   { id: 'start-job', label: 'Start Job' },
   { id: 'profile-manager', label: 'Profile Manager' },
+  { id: 'job-profile-manager', label: 'Job Profile Manager' },
   { id: 'settings', label: 'Settings' },
   { id: 'results', label: 'Results' }
 ];
 
 export function App() {
   const initialProfiles = useMemo(() => readProfiles(), []);
+  const initialJobProfiles = useMemo(() => readJobProfiles(), []);
   const initialJobs = useMemo(() => readJobs(), []);
   const [activeSection, setActiveSection] = useState<AppSection>('start-job');
   const [profiles, setProfiles] = useState<WebsiteProfile[]>(initialProfiles);
   const [jobs, setJobs] = useState<JobRecord[]>(initialJobs);
+  const [jobProfiles, setJobProfiles] = useState<JobProfile[]>(initialJobProfiles);
   const [createProfileRequestNonce, setCreateProfileRequestNonce] = useState(0);
 
   function handleRequestCreateProfile() {
@@ -55,6 +61,7 @@ export function App() {
       {activeSection === 'start-job' && (
         <StartJobPanel
           profiles={profiles}
+          jobProfiles={jobProfiles}
           onJobCreated={setJobs}
           onRequestCreateProfile={handleRequestCreateProfile}
         />
@@ -66,6 +73,9 @@ export function App() {
         />
       )}
       {activeSection === 'settings' && <SettingsPanel />}
+      {activeSection === 'job-profile-manager' && (
+        <JobProfileManagerPanel websiteProfiles={profiles} onJobProfilesChanged={setJobProfiles} />
+      )}
       {activeSection === 'results' && <ResultsPanel jobs={jobs} onJobsUpdated={setJobs} />}
     </main>
   );
