@@ -1,6 +1,8 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { buildCanonicalDocument } from '../../../packages/core/src/index.ts';
 import { crawlWithVirtualBrowser, type VirtualBrowserCrawlOptions } from '../../../packages/crawler-engine/src/index.ts';
 import {
@@ -21,7 +23,34 @@ type ExportRequest = {
   }>;
   profileName: string;
   profileDomain: string;
+  crawlPagesTempFileId?: string;
 };
+
+type CrawlPageRecord = {
+  url: string;
+  content: string;
+  metadata?: Record<string, string>;
+  stylesheets: string[];
+  scripts: string[];
+};
+
+const crawlPayloadDir = join(tmpdir(), 'content-creator-crawl-payloads');
+
+function crawlPayloadPath(fileId: string): string {
+  return join(crawlPayloadDir, `${fileId}.json`);
+}
+
+async function writeCrawlPagesTempFile(pages: CrawlPageRecord[]): Promise<string> {
+  await mkdir(crawlPayloadDir, { recursive: true });
+  const id = randomUUID();
+  await writeFile(crawlPayloadPath(id), JSON.stringify(pages), 'utf-8');
+  return id;
+}
+
+async function readCrawlPagesTempFile(fileId: string): Promise<CrawlPageRecord[]> {
+  const raw = await readFile(crawlPayloadPath(fileId), 'utf-8');
+  return JSON.parse(raw) as CrawlPageRecord[];
+}
 
 const port = Number.parseInt(process.env.CONTENT_CREATOR_BRIDGE_PORT ?? '8787', 10);
 const host = process.env.CONTENT_CREATOR_BRIDGE_HOST ?? '127.0.0.1';
@@ -124,13 +153,56 @@ async function handleExport(request: ExportRequest): Promise<{ artifacts: Export
   return { artifacts: normalized };
 }
 
+async function resolveExportPages(request: ExportRequest): Promise<ExportRequest['pages']> {
+  const hasAnyInlineContent = request.pages.some((page) => Boolean(page.content?.trim()));
+
+  if (!request.crawlPagesTempFileId) {
+    return request.pages;
+  }
+
+  const fromTemp = await readCrawlPagesTempFile(request.crawlPagesTempFileId);
+  const mappedFromTemp = fromTemp.map((page) => ({
+    url: page.url,
+    content: page.content,
+    preview: page.content.slice(0, 240),
+    stylesheets: page.stylesheets,
+    scripts: page.scripts
+  }));
+
+  if (!hasAnyInlineContent) {
+    return mappedFromTemp;
+  }
+
+  const tempByUrl = new Map(mappedFromTemp.map((page) => [page.url, page]));
+  return request.pages.map((page) => {
+    if (page.content?.trim()) {
+      return page;
+    }
+
+    const fallback = tempByUrl.get(page.url);
+    if (!fallback) {
+      return page;
+    }
+
+    return {
+      ...page,
+      content: fallback.content,
+      preview: page.preview || fallback.preview,
+      stylesheets: (page.stylesheets?.length ?? 0) > 0 ? page.stylesheets : fallback.stylesheets,
+      scripts: (page.scripts?.length ?? 0) > 0 ? page.scripts : fallback.scripts
+    };
+  });
+}
+
 async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (!req.url || !req.method) {
     sendJson(res, 400, { error: 'Invalid request.' });
     return;
   }
 
-  console.log(`[desktop-bridge] request start ${req.method} ${req.url}`);
+  if (!(req.method === 'GET' && req.url === '/health')) {
+    console.log(`[desktop-bridge] request start ${req.method} ${req.url}`);
+  }
 
   if (req.method === 'OPTIONS') {
     sendJson(res, 204, { ok: true });
@@ -138,7 +210,6 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
   }
 
   if (req.method === 'GET' && req.url === '/health') {
-    console.log('[desktop-bridge] handling health check request');
     sendJson(res, 200, { ok: true, service: 'content-creator-desktop-bridge' });
     return;
   }
@@ -147,17 +218,25 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const body = await readJson<unknown>(req);
     console.log('[desktop-bridge] running crawl request');
     const result = await crawlWithVirtualBrowser(coerceCrawlOptions(body));
+    const crawlPagesTempFileId = await writeCrawlPagesTempFile(result.pages as CrawlPageRecord[]);
     console.log(
-      `[desktop-bridge] crawl completed pages=${result.pages.length} errors=${result.errors.length} notes=${result.notes.length}`
+      `[desktop-bridge] crawl completed pages=${result.pages.length} errors=${result.errors.length} notes=${result.notes.length} tempFile=${crawlPagesTempFileId}`
     );
-    sendJson(res, 200, result);
+    sendJson(res, 200, {
+      ...result,
+      crawlPagesTempFileId
+    });
     return;
   }
 
   if (req.method === 'POST' && req.url === '/export') {
     const body = await readJson<ExportRequest>(req);
+    const resolvedPages = await resolveExportPages(body);
     console.log(`[desktop-bridge] running export request for job=${body.jobId}`);
-    const result = await handleExport(body);
+    const result = await handleExport({
+      ...body,
+      pages: resolvedPages
+    });
     console.log(`[desktop-bridge] export completed artifacts=${result.artifacts.length}`);
     sendJson(res, 200, result);
     return;

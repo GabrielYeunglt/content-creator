@@ -51,7 +51,8 @@ async function runDesktopExport(job: JobRecord, format: 'html' | 'pdf' | 'epub' 
     format,
     pages: job.extractedPages ?? [],
     profileName: job.profileName,
-    profileDomain: job.profileDomain
+    profileDomain: job.profileDomain,
+    crawlPagesTempFileId: job.crawlPagesTempFileId
   });
 
   return persistArtifacts(job, response.artifacts);
