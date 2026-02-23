@@ -501,14 +501,25 @@ async function replaceDataImageUrls(
 }
 
 function parseDataImageUrl(dataUrl: string): { extension: string; data: Uint8Array } | null {
-  const match = /^data:image\/([a-zA-Z0-9.+-]+);base64,(.+)$/i.exec(dataUrl);
+  const match = /^data:image\/([a-zA-Z0-9.+-]+)(;[^,]*)?,([\s\S]+)$/i.exec(dataUrl);
   if (!match) {
     return null;
   }
 
   const extension = normalizeImageExtension(match[1]);
-  const data = decodeBase64ToBytes(match[2]);
-  return { extension, data };
+  const metadata = match[2] ?? '';
+  const payload = match[3];
+
+  const isBase64 = metadata
+    .split(';')
+    .map((value) => value.trim().toLowerCase())
+    .includes('base64');
+
+  if (isBase64) {
+    return { extension, data: decodeBase64ToBytes(payload.replace(/\s+/g, '')) };
+  }
+
+  return { extension, data: decodeUriEncodedBytes(payload) };
 }
 
 function decodeBase64ToBytes(value: string): Uint8Array {
@@ -529,6 +540,12 @@ function decodeBase64ToBytes(value: string): Uint8Array {
   }
 
   return bytes;
+}
+
+function decodeUriEncodedBytes(value: string): Uint8Array {
+  const decoded = decodeURIComponent(value);
+  const encoder = new TextEncoder();
+  return encoder.encode(decoded);
 }
 
 function normalizeImageExtension(mediaTypePart: string): string {
