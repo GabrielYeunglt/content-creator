@@ -48,6 +48,7 @@ export type WebsiteProfile = {
   id: string;
   name: string;
   domain: string;
+  profileType?: 'single-url' | 'multi-url';
   selectorRules: SelectorRule[];
   metadataRules?: Array<{
     id: string;
@@ -62,6 +63,7 @@ export type WebsiteProfile = {
   paginationRule: PaginationRule;
   totalPagesRule?: TotalPagesRule;
   stopRules: StopRules;
+  multiUrlOverrides?: Partial<Record<MetadataFieldType | 'other', string>>;
   createdAt: string;
   updatedAt: string;
 };
@@ -169,7 +171,9 @@ export function createDefaultExtractionRules(): ExtractionRuleDraft[] {
 export type ProfileDraft = {
   name: string;
   domain: string;
+  profileType: 'single-url' | 'multi-url';
   extractionRules: ExtractionRuleDraft[];
+  multiUrlOverrides: Partial<Record<MetadataFieldType | 'other', string>>;
   maxPages: number;
 };
 
@@ -177,7 +181,9 @@ export function createDefaultProfileDraft(): ProfileDraft {
   return {
     name: '',
     domain: '',
+    profileType: 'single-url',
     extractionRules: createDefaultExtractionRules(),
+    multiUrlOverrides: {},
     maxPages: 100
   };
 }

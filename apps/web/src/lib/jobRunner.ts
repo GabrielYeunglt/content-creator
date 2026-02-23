@@ -7,6 +7,7 @@ type RunnerOptions = {
   onJobsUpdated: (jobs: JobRecord[]) => void;
   profile: WebsiteProfile;
   startUrl: string;
+  startUrls?: string[];
 };
 
 type VirtualBrowserCrawlRequest = {
@@ -94,7 +95,7 @@ function getDesktopCrawlerBridge():
 }
 
 export async function runCrawlJob(jobId: string, options: RunnerOptions): Promise<void> {
-  const { onJobsUpdated, profile, startUrl } = options;
+  const { onJobsUpdated, profile, startUrl, startUrls } = options;
 
   const primaryRule = profile.selectorRules[0];
   if (!primaryRule) {
@@ -111,7 +112,16 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
 
   const running = updateJobStatus(jobId, 'running', 'Running virtual-browser crawl...');
   onJobsUpdated(running);
-  onJobsUpdated(appendJobLog(jobId, { level: 'info', message: `Job started for ${startUrl}` }));
+  const urlsToRun = (startUrls?.length ? startUrls : [startUrl]).map((url) => url.trim()).filter(Boolean);
+  onJobsUpdated(
+    appendJobLog(
+      jobId,
+      {
+        level: 'info',
+        message: `Job started for ${urlsToRun.length} URL(s): ${urlsToRun.join(', ')}`
+      }
+    )
+  );
 
   const bridge = getDesktopCrawlerBridge();
   if (!bridge) {
@@ -128,8 +138,9 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
   }
 
   try {
-    const result = await bridge({
-      startUrl,
+    const isMultiUrlMode = profile.profileType === 'multi-url';
+    const responses = await Promise.all(urlsToRun.map(async (url) => bridge({
+      startUrl: url,
       domain: normalizeDomain(profile.domain),
       contentRule: {
         selectorType: primaryRule.selectorType,
@@ -162,7 +173,7 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
         }
         : undefined,
       stopRules: {
-        maxPages: Math.max(1, profile.stopRules.maxPages),
+        maxPages: isMultiUrlMode ? 1 : Math.max(1, profile.stopRules.maxPages),
         maxConsecutiveErrors: 3
       },
       contentReadySelector: {
@@ -170,18 +181,27 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
         selector: primaryRule.selector,
         timeoutMs: 15000
       }
-    });
+    })));
 
-    const extractedPages: ExtractedPageRecord[] = result.pages.map((item) => ({
+    const extractedPages: ExtractedPageRecord[] = responses.flatMap((result) => result.pages.map((item) => ({
       url: item.url,
       content: createStoredContent(item.content, result.crawlPagesTempFileId),
       preview: cleanPreview(item.content),
-      metadata: item.metadata,
+      metadata: {
+        ...item.metadata,
+        ...(profile.multiUrlOverrides ?? {})
+      },
       stylesheets: item.stylesheets,
       scripts: item.scripts
-    }));
+    })));
 
-    console.log('Crawl result:', { ...result, pages: result.pages.map((p) => ({ url: p.url, metadata: p.metadata })) });
+    const allPagesProcessed = responses.reduce((sum, response) => sum + response.pagesProcessed, 0);
+    const lastResult = responses[responses.length - 1];
+
+    console.log('Crawl result:', responses.map((result) => ({
+      stopReason: result.stopReason,
+      pages: result.pages.map((p) => ({ url: p.url, metadata: p.metadata }))
+    })));
 
     const consolidated = buildCanonicalDocument({
       jobId,
@@ -193,10 +213,10 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
     const completed = updateJob(jobId, {
       status: 'completed',
       completedAt: new Date().toISOString(),
-      pagesProcessed: result.pagesProcessed,
-      lastVisitedUrl: result.pages[result.pages.length - 1]?.url,
+      pagesProcessed: allPagesProcessed,
+      lastVisitedUrl: extractedPages[extractedPages.length - 1]?.url,
       extractedPages,
-      crawlPagesTempFileId: result.crawlPagesTempFileId,
+      crawlPagesTempFileId: lastResult?.crawlPagesTempFileId,
       extractedPreview: extractedPages.map((item, index) => `Page ${index + 1}: ${item.preview}`).join('\n\n'),
       consolidatedDocument: {
         id: consolidated.id,
@@ -206,34 +226,36 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
         chapterCount: consolidated.chapters.length
         ,metadata: consolidated.metadata
       },
-      stopReason: result.stopReason,
-      note: `Virtual-browser crawl completed with stop reason: ${result.stopReason}.`
+      stopReason: lastResult?.stopReason ?? 'completed',
+      note: `Virtual-browser crawl completed for ${urlsToRun.length} URL(s). Final stop reason: ${lastResult?.stopReason ?? 'completed'}.`
     });
 
     onJobsUpdated(completed);
     onJobsUpdated(
       appendJobLog(jobId, {
         level: 'info',
-        message: `Crawl completed: ${result.pagesProcessed} page(s), stop reason ${result.stopReason}.`
+        message: `Crawl completed: ${allPagesProcessed} page(s) across ${urlsToRun.length} URL(s), final stop reason ${lastResult?.stopReason ?? 'completed'}.`
       })
     );
 
-    for (const note of result.notes ?? []) {
-      onJobsUpdated(
-        appendJobLog(jobId, {
-          level: 'info',
-          message: note
-        })
-      );
-    }
+    for (const result of responses) {
+      for (const note of result.notes ?? []) {
+        onJobsUpdated(
+          appendJobLog(jobId, {
+            level: 'info',
+            message: note
+          })
+        );
+      }
 
-    for (const issue of result.errors ?? []) {
-      onJobsUpdated(
-        appendJobLog(jobId, {
-          level: 'warn',
-          message: `Crawl retry/error at ${issue.url} (attempt ${issue.attempt}): ${issue.error}`
-        })
-      );
+      for (const issue of result.errors ?? []) {
+        onJobsUpdated(
+          appendJobLog(jobId, {
+            level: 'warn',
+            message: `Crawl retry/error at ${issue.url} (attempt ${issue.attempt}): ${issue.error}`
+          })
+        );
+      }
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';

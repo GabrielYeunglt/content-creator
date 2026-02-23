@@ -33,6 +33,10 @@ export function ProfileEditorForm({ mode, draft, onChange, onSave, onCancel }: P
   }
 
   function removeRule(ruleId: string) {
+    if (!window.confirm('Remove this extraction rule?')) {
+      return;
+    }
+
     onChange(
       'extractionRules',
       draft.extractionRules.filter((rule) => rule.id !== ruleId)
@@ -98,6 +102,41 @@ export function ProfileEditorForm({ mode, draft, onChange, onSave, onCancel }: P
             style={{ width: '100%' }}
           />
         </label>
+
+        <label>
+          Profile Mode
+          <select
+            value={draft.profileType}
+            onChange={(event) => onChange('profileType', event.target.value as 'single-url' | 'multi-url')}
+          >
+            <option value="single-url">Single URL crawl (existing behavior)</option>
+            <option value="multi-url">Multi URL extraction (manual chapter URL list)</option>
+          </select>
+        </label>
+
+        {draft.profileType === 'multi-url' && (
+          <fieldset style={{ border: '1px solid #ddd', padding: '0.75rem' }}>
+            <legend>Multi URL metadata overrides (optional)</legend>
+            <p style={{ marginTop: 0 }}>
+              If provided, these values override extracted metadata values in multi URL extraction jobs.
+            </p>
+            <div style={{ display: 'grid', gap: '0.5rem' }}>
+              {(['title', 'author', 'chapter', 'publisher', 'series', 'cover', 'language', 'description', 'other'] as const).map((field) => (
+                <label key={field}>
+                  {field}
+                  <input
+                    value={draft.multiUrlOverrides[field] ?? ''}
+                    onChange={(event) => onChange('multiUrlOverrides', {
+                      ...draft.multiUrlOverrides,
+                      [field]: event.target.value
+                    })}
+                    style={{ width: '100%' }}
+                  />
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        )}
 
         {autoVisibleRules.map((rule) => (
           <fieldset key={rule.id} style={{ border: '1px solid #ddd', padding: '0.75rem' }}>

@@ -67,6 +67,10 @@ export function ProfileManagerPanel({ onProfilesChanged, createProfileRequestNon
   }
 
   function handleDelete(profileId: string) {
+    if (!window.confirm('Delete this profile? This cannot be undone.')) {
+      return;
+    }
+
     const updated = profiles.filter((profile) => profile.id !== profileId);
     persistProfiles(updated);
     setMessage('Profile deleted.');
@@ -78,6 +82,10 @@ export function ProfileManagerPanel({ onProfilesChanged, createProfileRequestNon
   }
 
   function handleSaveCreate() {
+    if (!window.confirm('Create this profile with the current values?')) {
+      return;
+    }
+
     const result = createProfile(draft);
     if (!result.ok) {
       setMessage(result.error);
@@ -91,6 +99,10 @@ export function ProfileManagerPanel({ onProfilesChanged, createProfileRequestNon
   }
 
   function handleSaveEdit(profileId: string) {
+    if (!window.confirm('Save changes to this profile?')) {
+      return;
+    }
+
     const target = profiles.find((profile) => profile.id === profileId);
     if (!target) {
       setMessage('Profile not found.');
