@@ -19,6 +19,7 @@ type ExportRequest = {
     url: string;
     content?: string;
     preview: string;
+    metadata?: Record<string, string>;
     stylesheets?: string[];
     scripts?: string[];
   }>;
@@ -131,6 +132,7 @@ async function handleExport(request: ExportRequest): Promise<{ artifacts: Export
       url: page.url,
       content: page.content,
       preview: page.preview,
+      metadata: page.metadata,
       stylesheets: page.stylesheets,
       scripts: page.scripts
     }))
@@ -168,6 +170,7 @@ async function resolveExportPages(request: ExportRequest): Promise<ExportRequest
     url: page.url,
     content: page.content,
     preview: page.content.slice(0, 240),
+    metadata: page.metadata,
     stylesheets: page.stylesheets,
     scripts: page.scripts
   }));
@@ -191,6 +194,7 @@ async function resolveExportPages(request: ExportRequest): Promise<ExportRequest
       ...page,
       content: fallback.content,
       preview: page.preview || fallback.preview,
+      metadata: page.metadata ?? fallback.metadata,
       stylesheets: (page.stylesheets?.length ?? 0) > 0 ? page.stylesheets : fallback.stylesheets,
       scripts: (page.scripts?.length ?? 0) > 0 ? page.scripts : fallback.scripts
     };
