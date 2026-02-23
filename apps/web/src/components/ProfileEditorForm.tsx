@@ -198,10 +198,11 @@ export function ProfileEditorForm({ mode, draft, onChange, onSave, onCancel }: P
                   Pagination Navigation
                   <select
                     value={rule.navigationMode ?? 'url-attribute'}
-                    onChange={(event) => updateExtractionRule(rule.id, { navigationMode: event.target.value as 'url-attribute' | 'click' })}
+                    onChange={(event) => updateExtractionRule(rule.id, { navigationMode: event.target.value as 'url-attribute' | 'click' | 'url-pattern' })}
                   >
                     <option value="url-attribute">Extract next URL from attribute</option>
                     <option value="click">Click next button (JS-driven)</option>
+                    <option value="url-pattern">Build next URL from current page (#p=next)</option>
                   </select>
                 </label>
               )}

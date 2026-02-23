@@ -31,7 +31,7 @@ export type CrawlPaginationRule = {
   selectorType: SelectorType;
   selector: string;
   attributeName: string;
-  navigationMode?: 'url-attribute' | 'click';
+  navigationMode?: 'url-attribute' | 'click' | 'url-pattern';
 };
 
 export type CrawlTotalPagesRule = {
@@ -166,6 +166,23 @@ function toAbsoluteUrl(baseUrl: string, value: string): string | null {
   }
 }
 
+
+function resolveUrlPatternNext(currentUrl: string): string | null {
+  try {
+    const url = new URL(currentUrl);
+    const hash = url.hash.startsWith('#') ? url.hash.slice(1) : url.hash;
+    const params = new URLSearchParams(hash);
+    const rawPage = params.get('p');
+    const currentPage = Number.parseInt(rawPage ?? '1', 10);
+    const safeCurrentPage = Number.isFinite(currentPage) && currentPage >= 1 ? currentPage : 1;
+    params.set('p', String(safeCurrentPage + 1));
+    url.hash = params.toString();
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
 async function resolveNextUrl(params: {
   page: PlaywrightPageLike;
   currentUrl: string;
@@ -173,6 +190,10 @@ async function resolveNextUrl(params: {
   timeoutMs: number;
 }): Promise<string | null> {
   const { page, currentUrl, paginationRule, timeoutMs } = params;
+
+  if (paginationRule.navigationMode === 'url-pattern') {
+    return resolveUrlPatternNext(currentUrl);
+  }
 
   const nextValue = await page.evaluate(
     ({ selectorType, selector, attributeName }) => {
@@ -194,6 +215,10 @@ async function resolveNextUrl(params: {
   const resolvedFromAttribute = toAbsoluteUrl(currentUrl, nextValue);
   if (resolvedFromAttribute) {
     return resolvedFromAttribute;
+  }
+
+  if (paginationRule.navigationMode === 'url-attribute') {
+    return null;
   }
 
   const getPageState = async () => page.evaluate(() => {
