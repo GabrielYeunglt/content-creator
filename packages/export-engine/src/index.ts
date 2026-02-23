@@ -485,7 +485,7 @@ function buildCustomOpfTemplate(params: { series?: string }): string | undefined
 
 function formatErrorDetails(error: unknown): string {
   if (!error || typeof error !== 'object') {
-    return `error=${JSON.stringify(String(error))}`;
+    return `error=${JSON.stringify(scrubDataUrls(String(error)))}`;
   }
 
   const errorWithFields = error as {
@@ -497,14 +497,22 @@ function formatErrorDetails(error: unknown): string {
   };
 
   const details = [
-    `errorMessage=${JSON.stringify(errorWithFields.message ?? 'Unknown error')}`,
+    `errorMessage=${JSON.stringify(scrubDataUrls(errorWithFields.message ?? 'Unknown error'))}`,
     `code=${JSON.stringify(errorWithFields.code ?? null)}`,
     `errno=${JSON.stringify(errorWithFields.errno ?? null)}`,
     `syscall=${JSON.stringify(errorWithFields.syscall ?? null)}`,
-    `path=${JSON.stringify(errorWithFields.path ?? null)}`
+    `path=${JSON.stringify(scrubDataUrls(errorWithFields.path ?? null))}`
   ];
 
   return details.join(' ');
+}
+
+function scrubDataUrls(value: unknown): unknown {
+  if (typeof value !== 'string') {
+    return value;
+  }
+
+  return value.replace(/data:image\/[a-zA-Z0-9.+-]+(?:;[^,]*)?,[^"'\s)]+/gi, '[data:image omitted]');
 }
 
 function toLabel(key: string): string {

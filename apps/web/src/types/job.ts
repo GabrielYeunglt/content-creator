@@ -48,7 +48,7 @@ export type JobRecord = {
   pagesProcessed?: number;
   lastVisitedUrl?: string;
   consolidatedDocument?: ConsolidatedDocumentRecord;
-  exportDestination?: 'desktop-artifacts' | 'browser-download';
+  exportDestination?: string;
   exportFileNameTemplate?: string;
   exportedArtifacts?: ExportedArtifactRecord[];
   logs?: Array<{

@@ -18,7 +18,7 @@ function sanitizeJobProfile(candidate: Partial<JobProfile>): JobProfile | null {
       ? Math.floor(candidate.maxPagesOverride)
       : undefined,
     metadataOverrides: candidate.metadataOverrides ?? {},
-    exportDestination: candidate.exportDestination === 'browser-download' ? 'browser-download' : 'desktop-artifacts',
+    exportDestination: candidate.exportDestination?.trim() || '',
     exportFileNameTemplate: candidate.exportFileNameTemplate?.trim() || '{{job.id}}-{{date}}',
     createdAt: candidate.createdAt ?? new Date().toISOString(),
     updatedAt: candidate.updatedAt ?? new Date().toISOString()
@@ -106,7 +106,7 @@ export function jobProfileToDraft(profile: JobProfile): JobProfileDraft {
     totalPagesSelectorOverride: profile.totalPagesSelectorOverride ?? '',
     maxPagesOverride: profile.maxPagesOverride ?? '',
     metadataOverrides: profile.metadataOverrides ?? {},
-    exportDestination: profile.exportDestination ?? 'desktop-artifacts',
+    exportDestination: profile.exportDestination ?? '',
     exportFileNameTemplate: profile.exportFileNameTemplate ?? '{{job.id}}-{{date}}'
   };
 }

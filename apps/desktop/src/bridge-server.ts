@@ -1,7 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { buildCanonicalDocument } from '../../../packages/core/src/index.ts';
 import { crawlWithVirtualBrowser, type VirtualBrowserCrawlOptions } from '../../../packages/crawler-engine/src/index.ts';
@@ -26,7 +26,7 @@ type ExportRequest = {
   profileName: string;
   profileDomain: string;
   crawlPagesTempFileId?: string;
-  exportDestination?: 'desktop-artifacts' | 'browser-download';
+  exportDestination?: string;
   exportFileNameTemplate?: string;
   exportLayout?: ExportLayout;
 };
@@ -90,8 +90,7 @@ async function readJson<T>(req: IncomingMessage): Promise<T> {
 function sanitizeFilePart(value: string): string {
   return value
     .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9-_.]+/g, '-')
+    .replace(/[^\p{L}\p{N}\-_.]+/gu, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 80) || 'artifact';
 }
@@ -102,13 +101,23 @@ function createArtifactPaths(request: ExportRequest, metadata: Record<string, st
   epubPath?: string;
 } {
   const baseName = buildExportBaseName(request, metadata, documentTitle);
+  const destinationRoot = resolveArtifactRoot(request.exportDestination);
 
   const includeAll = request.format === 'all';
   return {
-    htmlPath: includeAll || request.format === 'html' ? join(artifactRoot, `${baseName}.html`) : undefined,
-    pdfPath: includeAll || request.format === 'pdf' ? join(artifactRoot, `${baseName}.pdf`) : undefined,
-    epubPath: includeAll || request.format === 'epub' ? join(artifactRoot, `${baseName}.epub`) : undefined
+    htmlPath: includeAll || request.format === 'html' ? join(destinationRoot, `${baseName}.html`) : undefined,
+    pdfPath: includeAll || request.format === 'pdf' ? join(destinationRoot, `${baseName}.pdf`) : undefined,
+    epubPath: includeAll || request.format === 'epub' ? join(destinationRoot, `${baseName}.epub`) : undefined
   };
+}
+
+function resolveArtifactRoot(exportDestination?: string): string {
+  const trimmed = exportDestination?.trim();
+  if (!trimmed || trimmed === 'desktop-artifacts' || trimmed === 'browser-download') {
+    return artifactRoot;
+  }
+
+  return resolve(trimmed);
 }
 
 function buildExportBaseName(request: ExportRequest, metadata: Record<string, string>, documentTitle: string): string {
@@ -143,8 +152,6 @@ async function handleExport(request: ExportRequest): Promise<{ artifacts: Export
   console.log(
     `[desktop-bridge] preparing export for job=${request.jobId} format=${request.format} pages=${request.pages.length}`
   );
-  await mkdir(artifactRoot, { recursive: true });
-
   const canonical = buildCanonicalDocument({
     jobId: request.jobId,
     profileName: request.profileName,
@@ -160,9 +167,20 @@ async function handleExport(request: ExportRequest): Promise<{ artifacts: Export
   });
 
   const paths = createArtifactPaths(request, canonical.metadata, canonical.title);
+  const directories = new Set(
+    [paths.htmlPath, paths.pdfPath, paths.epubPath]
+      .filter((value): value is string => Boolean(value))
+      .map((outputPath) => dirname(outputPath))
+  );
+  await Promise.all(Array.from(directories).map((directoryPath) => mkdir(directoryPath, { recursive: true })));
   console.log(
     `[desktop-bridge] export output paths html=${paths.htmlPath ?? 'n/a'} pdf=${paths.pdfPath ?? 'n/a'} epub=${paths.epubPath ?? 'n/a'}`
   );
+  if (request.format === 'epub' || request.format === 'all') {
+    console.log(
+      `[desktop-bridge] epub diagnostics job=${request.jobId} metadataKeys=${Object.keys(canonical.metadata).join(',') || 'none'} chapterCount=${canonical.chapters.length}`
+    );
+  }
   const artifacts = await runExportPipeline({
     document: canonical,
     outputHtmlPath: paths.htmlPath,

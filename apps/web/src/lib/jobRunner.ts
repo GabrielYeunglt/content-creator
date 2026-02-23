@@ -110,7 +110,7 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
 
   const primaryRule = profile.selectorRules[0];
 
-  if (jobProfile?.exportDestination === 'desktop-artifacts' && !getDesktopExportBridge()) {
+  if (jobProfile?.exportDestination !== 'browser-download' && !getDesktopExportBridge()) {
     const failed = updateJob(jobId, {
       status: 'failed',
       completedAt: new Date().toISOString(),

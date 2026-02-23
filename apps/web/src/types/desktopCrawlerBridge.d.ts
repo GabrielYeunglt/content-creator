@@ -75,7 +75,7 @@ declare global {
       profileName: string;
       profileDomain: string;
       crawlPagesTempFileId?: string;
-      exportDestination?: 'desktop-artifacts' | 'browser-download';
+      exportDestination?: string;
       exportFileNameTemplate?: string;
       exportLayout?: {
         disableTableOfContents: boolean;

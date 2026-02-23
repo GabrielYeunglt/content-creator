@@ -26,8 +26,7 @@ function canonicalFromJob(job: JobRecord) {
 function sanitizeFilePart(value: string): string {
   return value
     .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9-_.]+/g, '-')
+    .replace(/[^\p{L}\p{N}\-_.]+/gu, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 120) || 'artifact';
 }
