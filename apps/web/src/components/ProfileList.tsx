@@ -31,6 +31,9 @@ export function ProfileList({ profiles, onCreateNew, onEdit, onDelete }: Profile
             Next navigation: <code>{profile.paginationRule.navigationMode ?? 'url-attribute'}</code>
           </p>
           <p>
+            Post-nav wait: <code>{profile.paginationRule.postNavigationDelaySeconds ?? 0.5}s</code>
+          </p>
+          <p>
             Total-pages rule: {profile.totalPagesRule?.selector ? <code>{profile.totalPagesRule.selector}</code> : 'not set'}
           </p>
           <p>Optional metadata extractions: {profile.metadataRules?.length ?? 0}</p>

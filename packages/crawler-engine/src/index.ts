@@ -32,6 +32,7 @@ export type CrawlPaginationRule = {
   selector: string;
   attributeName: string;
   navigationMode?: 'url-attribute' | 'click' | 'url-pattern';
+  postNavigationDelaySeconds?: number;
 };
 
 export type CrawlTotalPagesRule = {
@@ -359,8 +360,9 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
   const errors: CrawlErrorRecord[] = [];
   const notes: string[] = [];
   const navigationWaitUntil = resolveNavigationWaitUntil(paginationRule.navigationMode);
+  const postNavigationDelayMs = Math.max(0, Number(paginationRule.postNavigationDelaySeconds) || 0.5) * 1000;
   notes.push(
-    `Pagination mode: ${paginationRule.navigationMode ?? 'url-attribute'}; page.goto waitUntil=${navigationWaitUntil}.`
+    `Pagination mode: ${paginationRule.navigationMode ?? 'url-attribute'}; page.goto waitUntil=${navigationWaitUntil}; post-navigation wait=${postNavigationDelayMs}ms.`
   );
 
   let currentUrl: string | null = startUrl;
@@ -405,6 +407,9 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
         for (let attempt = 1; attempt <= maxRetriesPerPage + 1; attempt += 1) {
           try {
             await page.goto(currentUrl, { waitUntil: navigationWaitUntil, timeout: timeoutMs });
+            if (postNavigationDelayMs > 0) {
+              await page.waitForTimeout(postNavigationDelayMs);
+            }
 
             for (const step of interactionSteps) {
               if (step.type === 'click') {

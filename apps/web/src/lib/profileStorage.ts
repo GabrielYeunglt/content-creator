@@ -58,7 +58,8 @@ function sanitizeProfile(candidate: Partial<WebsiteProfile>): WebsiteProfile | n
         ? 'click'
         : candidate.paginationRule.navigationMode === 'url-pattern'
           ? 'url-pattern'
-          : 'url-attribute'
+          : 'url-attribute',
+      postNavigationDelaySeconds: Math.max(0, Number(candidate.paginationRule.postNavigationDelaySeconds) || 0.5)
     },
     totalPagesRule: candidate.totalPagesRule && candidate.totalPagesRule.selector?.trim()
       ? {
@@ -145,7 +146,8 @@ function buildProfile(draft: ProfileDraft, id: string, createdAt: string): Websi
       selectorType: paginationRule?.selectorType ?? 'css',
       selector: paginationRule?.selector.trim() ?? '',
       attributeName: paginationRule?.attributeName.trim() || 'href',
-      navigationMode: paginationRule?.navigationMode ?? 'url-attribute'
+      navigationMode: paginationRule?.navigationMode ?? 'url-attribute',
+      postNavigationDelaySeconds: Math.max(0, Number(paginationRule?.postNavigationDelaySeconds) || 0.5)
     },
     totalPagesRule: totalPagesRule?.selector.trim()
       ? {
@@ -221,7 +223,8 @@ export function profileToDraft(profile: WebsiteProfile): ProfileDraft {
         selectorType: profile.paginationRule.selectorType,
         selector: profile.paginationRule.selector,
         attributeName: profile.paginationRule.attributeName,
-        navigationMode: profile.paginationRule.navigationMode ?? 'url-attribute'
+        navigationMode: profile.paginationRule.navigationMode ?? 'url-attribute',
+        postNavigationDelaySeconds: Math.max(0, Number(profile.paginationRule.postNavigationDelaySeconds) || 0.5)
       },
       {
         ...defaultTotalPages,

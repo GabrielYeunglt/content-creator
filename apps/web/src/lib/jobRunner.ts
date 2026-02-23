@@ -33,6 +33,7 @@ type VirtualBrowserCrawlRequest = {
     selector: string;
     attributeName: string;
     navigationMode?: 'url-attribute' | 'click' | 'url-pattern';
+    postNavigationDelaySeconds?: number;
   };
   totalPagesRule?: {
     selectorType: 'css' | 'xpath';
@@ -141,7 +142,8 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
         selectorType: profile.paginationRule.selectorType,
         selector: profile.paginationRule.selector,
         attributeName: profile.paginationRule.attributeName,
-        navigationMode: profile.paginationRule.navigationMode
+        navigationMode: profile.paginationRule.navigationMode,
+        postNavigationDelaySeconds: profile.paginationRule.postNavigationDelaySeconds
       },
       totalPagesRule: profile.totalPagesRule
         ? {
