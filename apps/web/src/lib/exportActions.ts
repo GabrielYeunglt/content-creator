@@ -1,5 +1,6 @@
 import { buildCanonicalDocument } from '../../../../packages/core/src';
 import { renderCanonicalHtml } from '../../../../packages/export-engine/src';
+import { readSavedExportFormatConfig } from './exportFormatStorage';
 import { updateJob } from './jobStorage';
 import type { ExportedArtifactRecord, JobRecord } from '../types/job';
 
@@ -46,13 +47,16 @@ async function runDesktopExport(job: JobRecord, format: 'html' | 'pdf' | 'epub' 
     return null;
   }
 
+  const savedExportLayout = readSavedExportFormatConfig();
+
   const response = await bridge({
     jobId: job.id,
     format,
     pages: job.extractedPages ?? [],
     profileName: job.profileName,
     profileDomain: job.profileDomain,
-    crawlPagesTempFileId: job.crawlPagesTempFileId
+    crawlPagesTempFileId: job.crawlPagesTempFileId,
+    exportLayout: savedExportLayout ?? undefined
   });
 
   return persistArtifacts(job, response.artifacts);
@@ -65,7 +69,7 @@ export async function exportJobAsHtml(job: JobRecord): Promise<JobRecord[] | nul
   }
 
   const canonical = canonicalFromJob(job);
-  const html = renderCanonicalHtml(canonical);
+  const html = renderCanonicalHtml(canonical, readSavedExportFormatConfig() ?? undefined);
   downloadTextFile(`${job.id}.html`, html, 'text/html;charset=utf-8');
   return null;
 }

@@ -8,7 +8,8 @@ import { crawlWithVirtualBrowser, type VirtualBrowserCrawlOptions } from '../../
 import {
   runExportPipeline,
   type ExportArtifact,
-  type ExportArtifactFormat
+  type ExportArtifactFormat,
+  type ExportLayout
 } from '../../../packages/export-engine/src/index.ts';
 
 type ExportRequest = {
@@ -24,6 +25,7 @@ type ExportRequest = {
   profileName: string;
   profileDomain: string;
   crawlPagesTempFileId?: string;
+  exportLayout?: ExportLayout;
 };
 
 type CrawlPageRecord = {
@@ -142,7 +144,8 @@ async function handleExport(request: ExportRequest): Promise<{ artifacts: Export
     document: canonical,
     outputHtmlPath: paths.htmlPath,
     outputPdfPath: paths.pdfPath,
-    outputEpubPath: paths.epubPath
+    outputEpubPath: paths.epubPath,
+    exportLayout: request.exportLayout
   });
 
   const normalized = artifacts.map((artifact) => ({
