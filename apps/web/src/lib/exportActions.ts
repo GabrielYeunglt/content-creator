@@ -4,6 +4,14 @@ import { readSavedExportFormatConfig } from './exportFormatStorage';
 import { updateJob } from './jobStorage';
 import type { ExportedArtifactRecord, JobRecord } from '../types/job';
 
+function toErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return 'Unknown error';
+}
+
 function downloadTextFile(filename: string, content: string, mimeType: string): void {
   const blob = new Blob([content], { type: mimeType });
   const url = URL.createObjectURL(blob);
@@ -102,9 +110,15 @@ export async function exportJobAsHtml(job: JobRecord): Promise<JobRecord[] | nul
     return null;
   }
 
-  const desktopExport = await runDesktopExport(job, 'html');
-  if (desktopExport) {
-    return desktopExport;
+  try {
+    const desktopExport = await runDesktopExport(job, 'html');
+    if (desktopExport) {
+      return desktopExport;
+    }
+  } catch (error) {
+    return updateJob(job.id, {
+      note: `HTML export failed: ${toErrorMessage(error)}`
+    });
   }
 
   const canonical = canonicalFromJob(job);
@@ -120,9 +134,15 @@ export async function exportJobAsEpub(job: JobRecord): Promise<JobRecord[] | nul
     });
   }
 
-  const desktopExport = await runDesktopExport(job, 'epub');
-  if (desktopExport) {
-    return desktopExport;
+  try {
+    const desktopExport = await runDesktopExport(job, 'epub');
+    if (desktopExport) {
+      return desktopExport;
+    }
+  } catch (error) {
+    return updateJob(job.id, {
+      note: `EPUB export failed: ${toErrorMessage(error)}`
+    });
   }
 
   return updateJob(job.id, {
@@ -137,5 +157,11 @@ export async function exportJobAllViaDesktop(job: JobRecord): Promise<JobRecord[
     });
   }
 
-  return runDesktopExport(job, 'all');
+  try {
+    return await runDesktopExport(job, 'all');
+  } catch (error) {
+    return updateJob(job.id, {
+      note: `Export all failed: ${toErrorMessage(error)}`
+    });
+  }
 }
