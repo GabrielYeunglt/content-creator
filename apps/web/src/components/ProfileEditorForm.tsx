@@ -206,6 +206,25 @@ export function ProfileEditorForm({ mode, draft, onChange, onSave, onCancel }: P
                   </select>
                 </label>
               )}
+
+
+              {rule.type === 'pagination' && (
+                <label>
+                  Wait After Navigation (seconds)
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.1}
+                    value={rule.postNavigationDelaySeconds ?? 0.5}
+                    onChange={(event) => {
+                      const parsed = Number.parseFloat(event.target.value);
+                      updateExtractionRule(rule.id, {
+                        postNavigationDelaySeconds: Number.isFinite(parsed) && parsed >= 0 ? parsed : 0
+                      });
+                    }}
+                  />
+                </label>
+              )}
             </div>
           </fieldset>
         ))}

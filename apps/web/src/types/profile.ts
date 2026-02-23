@@ -35,6 +35,7 @@ export type PaginationRule = {
   selector: string;
   attributeName: string;
   navigationMode?: 'url-attribute' | 'click' | 'url-pattern';
+  postNavigationDelaySeconds?: number;
 };
 
 export type TotalPagesRule = {
@@ -83,6 +84,7 @@ export type ExtractionRuleDraft = {
   fieldType?: MetadataFieldType;
   customFieldName?: string;
   navigationMode?: 'url-attribute' | 'click' | 'url-pattern';
+  postNavigationDelaySeconds?: number;
 };
 
 export const defaultSelectorRule: SelectorRule = {
@@ -123,7 +125,8 @@ function createPaginationRule(): ExtractionRuleDraft {
     extractMode: 'attribute',
     attributeName: 'href',
     attributeUrlMode: 'value',
-    navigationMode: 'url-attribute'
+    navigationMode: 'url-attribute',
+    postNavigationDelaySeconds: 0.5
   };
 }
 

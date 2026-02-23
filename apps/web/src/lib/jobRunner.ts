@@ -33,6 +33,7 @@ type VirtualBrowserCrawlRequest = {
     selector: string;
     attributeName: string;
     navigationMode?: 'url-attribute' | 'click' | 'url-pattern';
+    postNavigationDelaySeconds?: number;
   };
   totalPagesRule?: {
     selectorType: 'css' | 'xpath';
@@ -53,6 +54,7 @@ type VirtualBrowserCrawlRequest = {
 type VirtualBrowserCrawlResponse = {
   pagesProcessed: number;
   stopReason: string;
+  crawlPagesTempFileId?: string;
   errors?: Array<{ url: string; attempt: number; error: string }>;
   notes?: string[];
   pages: Array<{
@@ -63,6 +65,14 @@ type VirtualBrowserCrawlResponse = {
     scripts: string[];
   }>;
 };
+
+function createStoredContent(content: string, crawlPagesTempFileId?: string): string {
+  if (crawlPagesTempFileId) {
+    return '';
+  }
+
+  return content;
+}
 
 function cleanPreview(value: string): string {
   const normalized = value.replace(/\s+/g, ' ').trim();
@@ -141,7 +151,8 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
         selectorType: profile.paginationRule.selectorType,
         selector: profile.paginationRule.selector,
         attributeName: profile.paginationRule.attributeName,
-        navigationMode: profile.paginationRule.navigationMode
+        navigationMode: profile.paginationRule.navigationMode,
+        postNavigationDelaySeconds: profile.paginationRule.postNavigationDelaySeconds
       },
       totalPagesRule: profile.totalPagesRule
         ? {
@@ -163,12 +174,14 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
 
     const extractedPages: ExtractedPageRecord[] = result.pages.map((item) => ({
       url: item.url,
-      content: item.content,
+      content: createStoredContent(item.content, result.crawlPagesTempFileId),
       preview: cleanPreview(item.content),
       metadata: item.metadata,
       stylesheets: item.stylesheets,
       scripts: item.scripts
     }));
+
+    console.log('Crawl result:', { ...result, pages: result.pages.map((p) => ({ url: p.url, metadata: p.metadata })) });
 
     const consolidated = buildCanonicalDocument({
       jobId,
@@ -183,6 +196,7 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
       pagesProcessed: result.pagesProcessed,
       lastVisitedUrl: result.pages[result.pages.length - 1]?.url,
       extractedPages,
+      crawlPagesTempFileId: result.crawlPagesTempFileId,
       extractedPreview: extractedPages.map((item, index) => `Page ${index + 1}: ${item.preview}`).join('\n\n'),
       consolidatedDocument: {
         id: consolidated.id,

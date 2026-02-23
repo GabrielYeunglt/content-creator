@@ -3,20 +3,33 @@ import type { JobRecord, JobStatus } from '../types/job';
 const JOB_STORAGE_KEY = 'content-creator:jobs:v1';
 const MAX_STORED_JOBS = 25;
 const MAX_STORED_LOGS_PER_JOB = 200;
-const MAX_STORED_PAGE_CONTENT_CHARS = 8_000;
 
-function trimJobPayloadForStorage(jobs: JobRecord[]): JobRecord[] {
+function normalizeJobsForStorage(jobs: JobRecord[]): JobRecord[] {
   return jobs.slice(0, MAX_STORED_JOBS).map((job) => ({
     ...job,
     logs: job.logs?.slice(-MAX_STORED_LOGS_PER_JOB),
-    extractedPreview: job.extractedPreview?.slice(0, MAX_STORED_PAGE_CONTENT_CHARS),
+    extractedPreview: job.crawlPagesTempFileId ? undefined : job.extractedPreview,
     extractedPages: job.extractedPages?.map((page) => ({
       ...page,
-      content: page.content.slice(0, MAX_STORED_PAGE_CONTENT_CHARS),
+      content: job.crawlPagesTempFileId ? '' : page.content,
       stylesheets: undefined,
       scripts: undefined
     }))
   }));
+}
+
+function dropHeavyExtractedFields(jobs: JobRecord[], keepLatestCount: number): JobRecord[] {
+  return jobs.map((job, index) => {
+    if (index < keepLatestCount) {
+      return job;
+    }
+
+    return {
+      ...job,
+      extractedPreview: undefined,
+      extractedPages: undefined
+    };
+  });
 }
 
 export function readJobs(): JobRecord[] {
@@ -34,15 +47,27 @@ export function readJobs(): JobRecord[] {
 }
 
 export function writeJobs(jobs: JobRecord[]): void {
+  const normalizedJobs = normalizeJobsForStorage(jobs);
+
   try {
-    window.localStorage.setItem(JOB_STORAGE_KEY, JSON.stringify(jobs));
+    window.localStorage.setItem(JOB_STORAGE_KEY, JSON.stringify(normalizedJobs));
   } catch (error) {
     if (!(error instanceof DOMException) || error.name !== 'QuotaExceededError') {
       throw error;
     }
 
-    const trimmedJobs = trimJobPayloadForStorage(jobs);
-    window.localStorage.setItem(JOB_STORAGE_KEY, JSON.stringify(trimmedJobs));
+    const withoutOlderExtractedData = dropHeavyExtractedFields(normalizedJobs, 1);
+
+    try {
+      window.localStorage.setItem(JOB_STORAGE_KEY, JSON.stringify(withoutOlderExtractedData));
+    } catch (secondError) {
+      if (!(secondError instanceof DOMException) || secondError.name !== 'QuotaExceededError') {
+        throw secondError;
+      }
+
+      const minimalJobs = dropHeavyExtractedFields(normalizedJobs, 0);
+      window.localStorage.setItem(JOB_STORAGE_KEY, JSON.stringify(minimalJobs));
+    }
   }
 }
 
