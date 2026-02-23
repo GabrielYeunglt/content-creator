@@ -32,7 +32,7 @@ type VirtualBrowserCrawlRequest = {
     selectorType: 'css' | 'xpath';
     selector: string;
     attributeName: string;
-    navigationMode?: 'url-attribute' | 'click';
+    navigationMode?: 'url-attribute' | 'click' | 'url-pattern';
   };
   totalPagesRule?: {
     selectorType: 'css' | 'xpath';
