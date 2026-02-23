@@ -9,11 +9,12 @@ export type ExportPageTemplate = {
 export type ExportFormatConfig = ExportLayout;
 
 export const defaultExportFormatConfig: ExportFormatConfig = {
-  skipIndexPage: false,
+  disableTableOfContents: false,
+  coverImageSource: 'metadata.cover',
   coverPage: {
     header: ['document.title'],
-    body: ['metadata.author', 'metadata.publisher', 'document.sourceDomain'],
-    footer: ['document.generatedAt']
+    body: ['metadata.list'],
+    footer: []
   },
   indexPage: {
     header: ['label.index'],

@@ -26,6 +26,8 @@ type ExportRequest = {
   profileName: string;
   profileDomain: string;
   crawlPagesTempFileId?: string;
+  exportDestination?: 'desktop-artifacts' | 'browser-download';
+  exportFileNameTemplate?: string;
   exportLayout?: ExportLayout;
 };
 
@@ -94,13 +96,12 @@ function sanitizeFilePart(value: string): string {
     .slice(0, 80) || 'artifact';
 }
 
-function createArtifactPaths(request: ExportRequest): {
+function createArtifactPaths(request: ExportRequest, metadata: Record<string, string>, documentTitle: string): {
   htmlPath?: string;
   pdfPath?: string;
   epubPath?: string;
 } {
-  const now = new Date().toISOString().replaceAll(':', '-');
-  const baseName = `${sanitizeFilePart(request.jobId)}-${now}`;
+  const baseName = buildExportBaseName(request, metadata, documentTitle);
 
   const includeAll = request.format === 'all';
   return {
@@ -108,6 +109,26 @@ function createArtifactPaths(request: ExportRequest): {
     pdfPath: includeAll || request.format === 'pdf' ? join(artifactRoot, `${baseName}.pdf`) : undefined,
     epubPath: includeAll || request.format === 'epub' ? join(artifactRoot, `${baseName}.epub`) : undefined
   };
+}
+
+function buildExportBaseName(request: ExportRequest, metadata: Record<string, string>, documentTitle: string): string {
+  const template = request.exportFileNameTemplate?.trim() || '{{job.id}}-{{date}}';
+  const now = new Date().toISOString().replaceAll(':', '-');
+
+  const rendered = template.replace(/\{\{\s*([^}]+)\s*\}\}/g, (_, tokenRaw: string) => {
+    const token = tokenRaw.trim();
+    if (token === 'job.id') return request.jobId;
+    if (token === 'date') return now;
+    if (token === 'profile.name') return request.profileName;
+    if (token === 'profile.domain') return request.profileDomain;
+    if (token === 'document.title') return documentTitle;
+    if (token.startsWith('metadata.')) {
+      return metadata[token.slice('metadata.'.length)] ?? '';
+    }
+    return '';
+  });
+
+  return sanitizeFilePart(rendered) || `${sanitizeFilePart(request.jobId)}-${now}`;
 }
 
 function coerceCrawlOptions(value: unknown): VirtualBrowserCrawlOptions {
@@ -138,7 +159,7 @@ async function handleExport(request: ExportRequest): Promise<{ artifacts: Export
     }))
   });
 
-  const paths = createArtifactPaths(request);
+  const paths = createArtifactPaths(request, canonical.metadata, canonical.title);
   console.log(
     `[desktop-bridge] export output paths html=${paths.htmlPath ?? 'n/a'} pdf=${paths.pdfPath ?? 'n/a'} epub=${paths.epubPath ?? 'n/a'}`
   );

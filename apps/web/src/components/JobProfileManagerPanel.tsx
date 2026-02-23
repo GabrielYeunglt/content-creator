@@ -17,6 +17,7 @@ type Props = {
 type View = { mode: 'list' } | { mode: 'create' } | { mode: 'edit'; profileId: string };
 
 const metadataFields = ['title', 'author', 'chapter', 'publisher', 'series', 'cover', 'language', 'description', 'other'] as const;
+const fileNameMetadataOptions = [...metadataFields, 'sourceDomain'];
 
 export function JobProfileManagerPanel({ websiteProfiles, onJobProfilesChanged }: Props) {
   const initialJobProfiles = useMemo(() => readJobProfiles(), []);
@@ -24,6 +25,7 @@ export function JobProfileManagerPanel({ websiteProfiles, onJobProfilesChanged }
   const [view, setView] = useState<View>({ mode: 'list' });
   const [draft, setDraft] = useState<JobProfileDraft>(createDefaultJobProfileDraft());
   const [message, setMessage] = useState('');
+  const [selectedFileNameMetadata, setSelectedFileNameMetadata] = useState(fileNameMetadataOptions[0]);
 
   function persist(updated: JobProfile[]) {
     setJobProfiles(updated);
@@ -75,6 +77,13 @@ export function JobProfileManagerPanel({ websiteProfiles, onJobProfilesChanged }
     setMessage('Job profile deleted.');
   }
 
+  function addMetadataTokenToFileName() {
+    updateDraft(
+      'exportFileNameTemplate',
+      `${draft.exportFileNameTemplate}{{metadata.${selectedFileNameMetadata}}}`
+    );
+  }
+
   return (
     <section>
       <h2>Job Profile Manager</h2>
@@ -92,6 +101,8 @@ export function JobProfileManagerPanel({ websiteProfiles, onJobProfilesChanged }
               <p><strong>{profile.name}</strong></p>
               <p>Base profile: <code>{websiteProfiles.find((p) => p.id === profile.baseProfileId)?.name ?? profile.baseProfileId}</code></p>
               <p>Metadata overrides: {Object.values(profile.metadataOverrides ?? {}).filter((v) => Boolean(v?.trim())).length}</p>
+              <p>Export destination: <code>{profile.exportDestination ?? 'desktop-artifacts'}</code></p>
+              <p>File name format: <code>{profile.exportFileNameTemplate ?? '{{job.id}}-{{date}}'}</code></p>
               <div style={{ display: 'flex', gap: '0.5rem' }}>
                 <button type="button" onClick={() => { setDraft(jobProfileToDraft(profile)); setView({ mode: 'edit', profileId: profile.id }); }}>
                   Edit
@@ -149,6 +160,37 @@ export function JobProfileManagerPanel({ websiteProfiles, onJobProfilesChanged }
                 </label>
               ))}
             </div>
+          </fieldset>
+          <fieldset style={{ border: '1px solid #ddd', padding: '0.75rem' }}>
+            <legend>Export behavior</legend>
+            <label>Export destination
+              <select
+                value={draft.exportDestination}
+                onChange={(event) => updateDraft('exportDestination', event.target.value as JobProfileDraft['exportDestination'])}
+                style={{ width: '100%' }}
+              >
+                <option value="desktop-artifacts">Desktop bridge artifacts folder</option>
+                <option value="browser-download">Browser direct download (HTML only fallback)</option>
+              </select>
+            </label>
+            <label>Export file name format
+              <input
+                value={draft.exportFileNameTemplate}
+                onChange={(event) => updateDraft('exportFileNameTemplate', event.target.value)}
+                style={{ width: '100%' }}
+              />
+            </label>
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginTop: '0.5rem' }}>
+              <select value={selectedFileNameMetadata} onChange={(event) => setSelectedFileNameMetadata(event.target.value)}>
+                {fileNameMetadataOptions.map((field) => (
+                  <option key={field} value={field}>{field}</option>
+                ))}
+              </select>
+              <button type="button" onClick={addMetadataTokenToFileName}>Add metadata</button>
+            </div>
+            <p style={{ margin: '0.5rem 0 0' }}>
+              Supported tokens: <code>{'{{job.id}} {{date}} {{profile.name}} {{profile.domain}} {{document.title}} {{metadata.key}}'}</code>
+            </p>
           </fieldset>
           <div style={{ display: 'flex', gap: '0.5rem' }}>
             <button type="button" onClick={() => view.mode === 'create' ? saveCreate() : saveEdit(view.profileId)}>

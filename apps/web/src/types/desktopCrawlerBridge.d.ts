@@ -75,8 +75,11 @@ declare global {
       profileName: string;
       profileDomain: string;
       crawlPagesTempFileId?: string;
+      exportDestination?: 'desktop-artifacts' | 'browser-download';
+      exportFileNameTemplate?: string;
       exportLayout?: {
-        skipIndexPage: boolean;
+        disableTableOfContents: boolean;
+        coverImageSource: 'metadata.cover' | 'first-image-from-url';
         coverPage: { header: string[]; body: string[]; footer: string[] };
         indexPage: { header: string[]; body: string[]; footer: string[] };
         contentPage: { header: string[]; body: string[]; footer: string[] };

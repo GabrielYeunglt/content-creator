@@ -22,7 +22,6 @@ const sectionLabels: Record<SectionKey, string> = {
 const baseElementOptions = [
   { value: 'document.title', label: 'Document title' },
   { value: 'document.sourceDomain', label: 'Source domain' },
-  { value: 'document.generatedAt', label: 'Generated at' },
   { value: 'metadata.list', label: 'All metadata list' },
   { value: 'label.index', label: 'Index label' },
   { value: 'index.chapterList', label: 'Chapter list (index)' },
@@ -111,13 +110,30 @@ export function ExportFormatManagerPanel({ jobs }: { jobs: JobRecord[] }) {
       <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
         <input
           type="checkbox"
-          checked={config.skipIndexPage}
+          checked={config.disableTableOfContents}
           onChange={(event) => {
-            setConfig((current) => ({ ...current, skipIndexPage: event.target.checked }));
+            setConfig((current) => ({ ...current, disableTableOfContents: event.target.checked }));
             setSaveState('idle');
           }}
         />
-        Skip index page
+        Disable table of contents page
+      </label>
+
+      <label style={{ display: 'grid', gap: '0.35rem', marginBottom: '1rem' }}>
+        Cover image source (EPUB)
+        <select
+          value={config.coverImageSource}
+          onChange={(event) => {
+            setConfig((current) => ({
+              ...current,
+              coverImageSource: event.target.value as ExportFormatConfig['coverImageSource']
+            }));
+            setSaveState('idle');
+          }}
+        >
+          <option value="metadata.cover">Metadata cover field</option>
+          <option value="first-image-from-url">First image extracted from URL content</option>
+        </select>
       </label>
 
       {(Object.keys(pageLabels) as PageKey[]).map((page) => (

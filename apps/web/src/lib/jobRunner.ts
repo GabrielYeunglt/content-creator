@@ -97,10 +97,30 @@ function getDesktopCrawlerBridge():
   return typeof bridge === 'function' ? bridge : null;
 }
 
+function getDesktopExportBridge(): ((request: unknown) => Promise<unknown>) | null {
+  const bridge = (window as Window & {
+    __CONTENT_CREATOR_DESKTOP_EXPORT__?: (request: unknown) => Promise<unknown>;
+  }).__CONTENT_CREATOR_DESKTOP_EXPORT__;
+
+  return typeof bridge === 'function' ? bridge : null;
+}
+
 export async function runCrawlJob(jobId: string, options: RunnerOptions): Promise<void> {
   const { onJobsUpdated, profile, startUrl, startUrls, jobProfile } = options;
 
   const primaryRule = profile.selectorRules[0];
+
+  if (jobProfile?.exportDestination === 'desktop-artifacts' && !getDesktopExportBridge()) {
+    const failed = updateJob(jobId, {
+      status: 'failed',
+      completedAt: new Date().toISOString(),
+      stopReason: 'desktop-export-bridge-missing',
+      note: 'Selected export destination requires desktop export bridge, but it is not connected.'
+    });
+    onJobsUpdated(failed);
+    return;
+  }
+
   if (!primaryRule) {
     const failed = updateJob(jobId, {
       status: 'failed',
