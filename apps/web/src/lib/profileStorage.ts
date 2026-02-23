@@ -40,6 +40,7 @@ function sanitizeProfile(candidate: Partial<WebsiteProfile>): WebsiteProfile | n
     id: candidate.id ?? crypto.randomUUID(),
     name: candidate.name.trim(),
     domain: normalizeDomain(candidate.domain),
+    profileType: candidate.profileType === 'multi-url' ? 'multi-url' : 'single-url',
     selectorRules,
     metadataRules: (candidate.metadataRules ?? [])
       .filter((rule) => rule.selector.trim().length > 0)
@@ -75,6 +76,7 @@ function sanitizeProfile(candidate: Partial<WebsiteProfile>): WebsiteProfile | n
       stopWhenUrlVisited: Boolean(candidate.stopRules.stopWhenUrlVisited),
       maxPages: Math.max(1, Number(candidate.stopRules.maxPages) || createDefaultProfileDraft().maxPages)
     },
+    multiUrlOverrides: candidate.multiUrlOverrides ?? {},
     createdAt: candidate.createdAt ?? new Date().toISOString(),
     updatedAt: candidate.updatedAt ?? new Date().toISOString()
   };
@@ -92,6 +94,10 @@ function validateProfileDraft(draft: ProfileDraft): { ok: true } | { ok: false; 
   const invalidRequiredRule = draft.extractionRules.find(
     (rule) => {
       if (!rule.showByDefault || rule.optional) {
+        return false;
+      }
+
+      if (draft.profileType === 'multi-url' && rule.type === 'pagination') {
         return false;
       }
 
@@ -118,6 +124,7 @@ function buildProfile(draft: ProfileDraft, id: string, createdAt: string): Websi
     id,
     name: draft.name.trim(),
     domain: normalizeDomain(draft.domain),
+    profileType: draft.profileType,
     selectorRules: contentRule
       ? [{
         id: crypto.randomUUID(),
@@ -161,6 +168,7 @@ function buildProfile(draft: ProfileDraft, id: string, createdAt: string): Websi
       stopWhenUrlVisited: true,
       maxPages: Math.max(1, draft.maxPages)
     },
+    multiUrlOverrides: draft.multiUrlOverrides,
     createdAt,
     updatedAt: new Date().toISOString()
   };
@@ -193,6 +201,7 @@ export function profileToDraft(profile: WebsiteProfile): ProfileDraft {
   return {
     name: profile.name,
     domain: profile.domain,
+    profileType: profile.profileType ?? 'single-url',
     extractionRules: [
       {
         ...defaultContent,
@@ -233,6 +242,7 @@ export function profileToDraft(profile: WebsiteProfile): ProfileDraft {
         attributeName: profile.totalPagesRule?.attributeName ?? defaultTotalPages.attributeName
       }
     ],
+    multiUrlOverrides: profile.multiUrlOverrides ?? {},
     maxPages: profile.stopRules.maxPages
   };
 }
