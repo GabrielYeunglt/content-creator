@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { runCrawlJob } from '../lib/jobRunner';
 import { appendJob } from '../lib/jobStorage';
 import { readRuntimeBridgeStatus } from '../lib/runtimeBridgeStatus';
+import type { JobMode, JobProfile } from '../types/jobProfile';
 import type { JobRecord } from '../types/job';
 import type { WebsiteProfile } from '../types/profile';
 
@@ -9,6 +10,7 @@ const CREATE_PROFILE_OPTION_VALUE = '__create_profile__';
 
 type StartJobPanelProps = {
   profiles: WebsiteProfile[];
+  jobProfiles: JobProfile[];
   onJobCreated: (jobs: JobRecord[]) => void;
   onRequestCreateProfile: () => void;
 };
@@ -21,10 +23,12 @@ function hostFromUrl(url: string): string | null {
   }
 }
 
-export function StartJobPanel({ profiles, onJobCreated, onRequestCreateProfile }: StartJobPanelProps) {
+export function StartJobPanel({ profiles, jobProfiles, onJobCreated, onRequestCreateProfile }: StartJobPanelProps) {
   const [startUrl, setStartUrl] = useState('');
   const [multiUrlsInput, setMultiUrlsInput] = useState('');
+  const [jobMode, setJobMode] = useState<JobMode>('single');
   const [selectedProfileId, setSelectedProfileId] = useState('');
+  const [selectedJobProfileId, setSelectedJobProfileId] = useState('');
   const [message, setMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -73,6 +77,22 @@ export function StartJobPanel({ profiles, onJobCreated, onRequestCreateProfile }
     [multiUrlsInput]
   );
 
+  const matchingJobProfiles = useMemo(
+    () => jobProfiles.filter((profile) => profile.baseProfileId === selectedProfileId),
+    [jobProfiles, selectedProfileId]
+  );
+
+  const selectedJobProfile = useMemo(
+    () => matchingJobProfiles.find((profile) => profile.id === selectedJobProfileId),
+    [matchingJobProfiles, selectedJobProfileId]
+  );
+
+  useEffect(() => {
+    setSelectedJobProfileId((current) => (
+      matchingJobProfiles.some((profile) => profile.id === current) ? current : ''
+    ));
+  }, [matchingJobProfiles]);
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -81,7 +101,7 @@ export function StartJobPanel({ profiles, onJobCreated, onRequestCreateProfile }
       return;
     }
 
-    const isMultiUrlMode = selectedProfile.profileType === 'multi-url';
+    const isMultiUrlMode = jobMode === 'multi';
     const urls = isMultiUrlMode ? parsedMultiUrls : [startUrl.trim()];
 
     if (urls.length === 0) {
@@ -128,7 +148,9 @@ export function StartJobPanel({ profiles, onJobCreated, onRequestCreateProfile }
         onJobsUpdated: onJobCreated,
         profile: selectedProfile,
         startUrl: urls[0],
-        startUrls: urls
+        startUrls: urls,
+        mode: jobMode,
+        jobProfile: selectedJobProfile
       });
       setMessage('Crawl run finished. Check Results for pages processed, preview, and stop reason.');
     } finally {
@@ -150,7 +172,7 @@ export function StartJobPanel({ profiles, onJobCreated, onRequestCreateProfile }
   return (
     <section>
       <h2>Start Job</h2>
-      <p>Pick a profile, then start a single URL crawl or a multi URL extraction run.</p>
+      <p>Pick a website profile, optionally apply a job profile, then run single or multi URL extraction.</p>
       <p style={{ color: runtimeBridgeStatus.crawlerBridgeReady ? '#1f7a1f' : '#8a4f00' }}>
         Crawl runtime bridge: {runtimeBridgeStatus.crawlerBridgeReady ? 'connected' : 'not connected'}.
       </p>
@@ -165,6 +187,14 @@ export function StartJobPanel({ profiles, onJobCreated, onRequestCreateProfile }
       )}
 
       <form onSubmit={handleSubmit} style={{ display: 'grid', gap: '0.75rem', maxWidth: '680px' }}>
+        <label>
+          Job Mode
+          <select value={jobMode} onChange={(event) => setJobMode(event.target.value as JobMode)} style={{ width: '100%' }}>
+            <option value="single">Single URL</option>
+            <option value="multi">Multiple URLs</option>
+          </select>
+        </label>
+
         <label>
           Website Profile
           <select
@@ -184,7 +214,22 @@ export function StartJobPanel({ profiles, onJobCreated, onRequestCreateProfile }
           </select>
         </label>
 
-        {selectedProfile?.profileType === 'multi-url' ? (
+        <label>
+          Job Profile Overrides (optional)
+          <select
+            value={selectedJobProfileId}
+            onChange={(event) => setSelectedJobProfileId(event.target.value)}
+            style={{ width: '100%' }}
+            disabled={!selectedProfile}
+          >
+            <option value="">None</option>
+            {matchingJobProfiles.map((profile) => (
+              <option key={profile.id} value={profile.id}>{profile.name}</option>
+            ))}
+          </select>
+        </label>
+
+        {jobMode === 'multi' ? (
           <label>
             Chapter URLs (comma, newline, or ';' separated)
             <textarea
@@ -208,7 +253,7 @@ export function StartJobPanel({ profiles, onJobCreated, onRequestCreateProfile }
         )}
 
         <button type="submit" disabled={isSubmitting || profiles.length === 0 || shouldShowCreateOption}>
-          {isSubmitting ? 'Running...' : selectedProfile?.profileType === 'multi-url' ? 'Start Multi URL Extraction' : 'Start Crawl Job'}
+          {isSubmitting ? 'Running...' : jobMode === 'multi' ? 'Start Multi URL Extraction' : 'Start Crawl Job'}
         </button>
       </form>
 

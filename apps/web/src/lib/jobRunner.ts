@@ -1,5 +1,6 @@
 import { buildCanonicalDocument } from '../../../../packages/core/src';
 import { appendJobLog, updateJob, updateJobStatus } from './jobStorage';
+import type { JobMode, JobProfile } from '../types/jobProfile';
 import type { ExtractedPageRecord, JobRecord } from '../types/job';
 import type { WebsiteProfile } from '../types/profile';
 
@@ -8,6 +9,8 @@ type RunnerOptions = {
   profile: WebsiteProfile;
   startUrl: string;
   startUrls?: string[];
+  mode?: JobMode;
+  jobProfile?: JobProfile;
 };
 
 type VirtualBrowserCrawlRequest = {
@@ -95,7 +98,7 @@ function getDesktopCrawlerBridge():
 }
 
 export async function runCrawlJob(jobId: string, options: RunnerOptions): Promise<void> {
-  const { onJobsUpdated, profile, startUrl, startUrls } = options;
+  const { onJobsUpdated, profile, startUrl, startUrls, mode = 'single', jobProfile } = options;
 
   const primaryRule = profile.selectorRules[0];
   if (!primaryRule) {
@@ -138,13 +141,13 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
   }
 
   try {
-    const isMultiUrlMode = profile.profileType === 'multi-url';
+    const isMultiUrlMode = mode === 'multi';
     const responses = await Promise.all(urlsToRun.map(async (url) => bridge({
       startUrl: url,
       domain: normalizeDomain(profile.domain),
       contentRule: {
         selectorType: primaryRule.selectorType,
-        selector: primaryRule.selector,
+        selector: jobProfile?.contentSelectorOverride ?? primaryRule.selector,
         extractMode: primaryRule.extractMode,
         attributeName: primaryRule.attributeName,
         attributeUrlMode: primaryRule.attributeUrlMode
@@ -160,7 +163,7 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
       })),
       paginationRule: {
         selectorType: profile.paginationRule.selectorType,
-        selector: profile.paginationRule.selector,
+        selector: jobProfile?.paginationSelectorOverride ?? profile.paginationRule.selector,
         attributeName: profile.paginationRule.attributeName,
         navigationMode: profile.paginationRule.navigationMode,
         postNavigationDelaySeconds: profile.paginationRule.postNavigationDelaySeconds
@@ -168,17 +171,19 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
       totalPagesRule: profile.totalPagesRule
         ? {
           selectorType: profile.totalPagesRule.selectorType,
-          selector: profile.totalPagesRule.selector,
+          selector: jobProfile?.totalPagesSelectorOverride ?? profile.totalPagesRule.selector,
           attributeName: profile.totalPagesRule.attributeName
         }
         : undefined,
       stopRules: {
-        maxPages: isMultiUrlMode ? 1 : Math.max(1, profile.stopRules.maxPages),
+        maxPages: isMultiUrlMode
+          ? 1
+          : Math.max(1, jobProfile?.maxPagesOverride ?? profile.stopRules.maxPages),
         maxConsecutiveErrors: 3
       },
       contentReadySelector: {
         selectorType: primaryRule.selectorType,
-        selector: primaryRule.selector,
+        selector: jobProfile?.contentSelectorOverride ?? primaryRule.selector,
         timeoutMs: 15000
       }
     })));
@@ -189,7 +194,7 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
       preview: cleanPreview(item.content),
       metadata: {
         ...item.metadata,
-        ...(profile.multiUrlOverrides ?? {})
+        ...(jobProfile?.metadataOverrides ?? {})
       },
       stylesheets: item.stylesheets,
       scripts: item.scripts
