@@ -99,7 +99,7 @@ type RequestLike = {
 };
 
 type PlaywrightPageLike = {
-  goto: (url: string, opts: { waitUntil: 'domcontentloaded' | 'networkidle'; timeout: number }) => Promise<void>;
+  goto: (url: string, opts: { waitUntil: 'commit' | 'domcontentloaded' | 'networkidle'; timeout: number }) => Promise<void>;
   on: (event: 'requestfinished', handler: (request: RequestLike) => void) => void;
   off: (event: 'requestfinished', handler: (request: RequestLike) => void) => void;
   evaluate: <TResult, TArg = undefined>(fn: (arg: TArg) => TResult | Promise<TResult>, arg?: TArg) => Promise<TResult>;
@@ -181,6 +181,11 @@ function resolveUrlPatternNext(currentUrl: string): string | null {
   } catch {
     return null;
   }
+}
+
+
+function resolveNavigationWaitUntil(mode: CrawlPaginationRule['navigationMode']): 'commit' | 'domcontentloaded' {
+  return mode === 'url-pattern' ? 'commit' : 'domcontentloaded';
 }
 
 async function resolveNextUrl(params: {
@@ -353,6 +358,10 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
   const pages: CrawledPage[] = [];
   const errors: CrawlErrorRecord[] = [];
   const notes: string[] = [];
+  const navigationWaitUntil = resolveNavigationWaitUntil(paginationRule.navigationMode);
+  notes.push(
+    `Pagination mode: ${paginationRule.navigationMode ?? 'url-attribute'}; page.goto waitUntil=${navigationWaitUntil}.`
+  );
 
   let currentUrl: string | null = startUrl;
   let totalPagesTarget: number | null = null;
@@ -395,7 +404,7 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
       try {
         for (let attempt = 1; attempt <= maxRetriesPerPage + 1; attempt += 1) {
           try {
-            await page.goto(currentUrl, { waitUntil: 'domcontentloaded', timeout: timeoutMs });
+            await page.goto(currentUrl, { waitUntil: navigationWaitUntil, timeout: timeoutMs });
 
             for (const step of interactionSteps) {
               if (step.type === 'click') {
