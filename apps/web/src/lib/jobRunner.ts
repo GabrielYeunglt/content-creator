@@ -98,7 +98,7 @@ function getDesktopCrawlerBridge():
 }
 
 export async function runCrawlJob(jobId: string, options: RunnerOptions): Promise<void> {
-  const { onJobsUpdated, profile, startUrl, startUrls, mode = 'single', jobProfile } = options;
+  const { onJobsUpdated, profile, startUrl, startUrls, jobProfile } = options;
 
   const primaryRule = profile.selectorRules[0];
   if (!primaryRule) {
@@ -141,7 +141,7 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
   }
 
   try {
-    const isMultiUrlMode = mode === 'multi';
+    const maxPages = Math.max(1, jobProfile?.maxPagesOverride ?? profile.stopRules.maxPages);
     const responses = await Promise.all(urlsToRun.map(async (url) => bridge({
       startUrl: url,
       domain: normalizeDomain(profile.domain),
@@ -176,9 +176,7 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
         }
         : undefined,
       stopRules: {
-        maxPages: isMultiUrlMode
-          ? 1
-          : Math.max(1, jobProfile?.maxPagesOverride ?? profile.stopRules.maxPages),
+        maxPages,
         maxConsecutiveErrors: 3
       },
       contentReadySelector: {
@@ -188,9 +186,11 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
       }
     })));
 
+    const shouldUseCrawlPagesTempFile = responses.length === 1;
+
     const extractedPages: ExtractedPageRecord[] = responses.flatMap((result) => result.pages.map((item) => ({
       url: item.url,
-      content: createStoredContent(item.content, result.crawlPagesTempFileId),
+      content: createStoredContent(item.content, shouldUseCrawlPagesTempFile ? result.crawlPagesTempFileId : undefined),
       preview: cleanPreview(item.content),
       metadata: {
         ...item.metadata,
@@ -221,7 +221,7 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
       pagesProcessed: allPagesProcessed,
       lastVisitedUrl: extractedPages[extractedPages.length - 1]?.url,
       extractedPages,
-      crawlPagesTempFileId: lastResult?.crawlPagesTempFileId,
+      crawlPagesTempFileId: shouldUseCrawlPagesTempFile ? lastResult?.crawlPagesTempFileId : undefined,
       extractedPreview: extractedPages.map((item, index) => `Page ${index + 1}: ${item.preview}`).join('\n\n'),
       consolidatedDocument: {
         id: consolidated.id,
