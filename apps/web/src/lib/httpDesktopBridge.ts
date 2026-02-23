@@ -5,6 +5,15 @@ const bridgeBaseUrl = (import.meta as ImportMeta & { env?: { VITE_DESKTOP_BRIDGE
 
 let installedByHttpBridge = false;
 
+const MAX_ERROR_DETAIL_LENGTH = 600;
+
+function sanitizeErrorDetail(detail: string): string {
+  const withoutDataUrls = detail.replace(/data:[^\s"'`)}\]]+/giu, '[data-url-redacted]');
+  return withoutDataUrls.length > MAX_ERROR_DETAIL_LENGTH
+    ? `${withoutDataUrls.slice(0, MAX_ERROR_DETAIL_LENGTH)}…`
+    : withoutDataUrls;
+}
+
 async function postJson<TRequest, TResponse>(path: string, payload: TRequest): Promise<TResponse> {
   const response = await fetch(`${bridgeBaseUrl}${path}`, {
     method: 'POST',
@@ -13,7 +22,7 @@ async function postJson<TRequest, TResponse>(path: string, payload: TRequest): P
   });
 
   if (!response.ok) {
-    const detail = await response.text();
+    const detail = sanitizeErrorDetail(await response.text());
     throw new Error(`Desktop bridge request failed (${response.status}): ${detail || response.statusText}`);
   }
 
