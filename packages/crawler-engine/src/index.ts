@@ -99,7 +99,7 @@ type RequestLike = {
 };
 
 type PlaywrightPageLike = {
-  goto: (url: string, opts: { waitUntil: 'networkidle'; timeout: number }) => Promise<void>;
+  goto: (url: string, opts: { waitUntil: 'domcontentloaded' | 'networkidle'; timeout: number }) => Promise<void>;
   on: (event: 'requestfinished', handler: (request: RequestLike) => void) => void;
   off: (event: 'requestfinished', handler: (request: RequestLike) => void) => void;
   evaluate: <TResult, TArg = undefined>(fn: (arg: TArg) => TResult | Promise<TResult>, arg?: TArg) => Promise<TResult>;
@@ -390,10 +390,12 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
 
       page.on('requestfinished', requestHandler);
 
+      let exhaustedRetries = false;
+
       try {
         for (let attempt = 1; attempt <= maxRetriesPerPage + 1; attempt += 1) {
           try {
-            await page.goto(currentUrl, { waitUntil: 'networkidle', timeout: timeoutMs });
+            await page.goto(currentUrl, { waitUntil: 'domcontentloaded', timeout: timeoutMs });
 
             for (const step of interactionSteps) {
               if (step.type === 'click') {
@@ -417,6 +419,7 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
             errors.push({ url: currentUrl, attempt, error: message });
 
             if (attempt > maxRetriesPerPage) {
+              exhaustedRetries = true;
               throw error;
             }
 
@@ -553,7 +556,10 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
       } catch (error) {
         consecutiveErrors += 1;
         const message = error instanceof Error ? error.message : 'Unknown crawl processing error';
-        errors.push({ url: currentUrl, attempt: maxRetriesPerPage + 1, error: message });
+
+        if (!exhaustedRetries) {
+          errors.push({ url: currentUrl, attempt: maxRetriesPerPage + 1, error: message });
+        }
 
         if (consecutiveErrors >= Math.max(1, stopRules.maxConsecutiveErrors)) {
           return { pagesProcessed: pages.length, stopReason: 'error-threshold-reached', pages, errors, notes };
