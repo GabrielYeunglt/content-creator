@@ -25,7 +25,8 @@ declare global {
         selectorType: 'css' | 'xpath';
         selector: string;
         attributeName: string;
-        navigationMode?: 'url-attribute' | 'click';
+        navigationMode?: 'url-attribute' | 'click' | 'url-pattern';
+        postNavigationDelaySeconds?: number;
       };
       totalPagesRule?: {
         selectorType: 'css' | 'xpath';
