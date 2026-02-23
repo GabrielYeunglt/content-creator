@@ -127,31 +127,46 @@ export function StartJobPanel({ profiles, jobProfiles, onJobCreated, onRequestCr
 
     setIsSubmitting(true);
 
-    const now = new Date().toISOString();
-    const newJob: JobRecord = {
-      id: crypto.randomUUID(),
-      profileId: selectedProfile.id,
-      profileName: selectedProfile.name,
-      profileDomain: selectedProfile.domain,
-      startUrl: urls[0],
-      status: 'queued',
-      createdAt: now,
-      note: 'Queued for crawl execution.'
-    };
+    const queuedJobIds: string[] = [];
+    let latestJobs: JobRecord[] | null = null;
 
-    const queuedJobs = appendJob(newJob);
-    onJobCreated(queuedJobs);
-    setMessage('Job queued. Running crawl loop...');
+    for (const url of urls) {
+      const now = new Date().toISOString();
+      const newJob: JobRecord = {
+        id: crypto.randomUUID(),
+        profileId: selectedProfile.id,
+        profileName: selectedProfile.name,
+        profileDomain: selectedProfile.domain,
+        startUrl: url,
+        status: 'queued',
+        createdAt: now,
+        note: 'Queued for crawl execution.'
+      };
+
+      latestJobs = appendJob(newJob);
+      queuedJobIds.push(newJob.id);
+    }
+
+    if (latestJobs) {
+      onJobCreated(latestJobs);
+    }
+
+    setMessage(
+      queuedJobIds.length === 1
+        ? 'Job queued. Running crawl loop...'
+        : `${queuedJobIds.length} jobs queued. Running crawl loops...`
+    );
 
     try {
-      await runCrawlJob(newJob.id, {
-        onJobsUpdated: onJobCreated,
-        profile: selectedProfile,
-        startUrl: urls[0],
-        startUrls: urls,
-        mode: jobMode,
-        jobProfile: selectedJobProfile
-      });
+      await Promise.all(
+        queuedJobIds.map((jobId, index) => runCrawlJob(jobId, {
+          onJobsUpdated: onJobCreated,
+          profile: selectedProfile,
+          startUrl: urls[index],
+          mode: jobMode,
+          jobProfile: selectedJobProfile
+        }))
+      );
       setMessage('Crawl run finished. Check Results for pages processed, preview, and stop reason.');
     } finally {
       setIsSubmitting(false);
