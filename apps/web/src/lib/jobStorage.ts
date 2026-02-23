@@ -8,8 +8,10 @@ function normalizeJobsForStorage(jobs: JobRecord[]): JobRecord[] {
   return jobs.slice(0, MAX_STORED_JOBS).map((job) => ({
     ...job,
     logs: job.logs?.slice(-MAX_STORED_LOGS_PER_JOB),
+    extractedPreview: job.crawlPagesTempFileId ? undefined : job.extractedPreview,
     extractedPages: job.extractedPages?.map((page) => ({
       ...page,
+      content: job.crawlPagesTempFileId ? '' : page.content,
       stylesheets: undefined,
       scripts: undefined
     }))

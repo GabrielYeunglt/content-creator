@@ -45,6 +45,7 @@ declare global {
     }) => Promise<{
       pagesProcessed: number;
       stopReason: string;
+      crawlPagesTempFileId?: string;
       errors?: Array<{
         url: string;
         attempt: number;
@@ -72,6 +73,7 @@ declare global {
       }>;
       profileName: string;
       profileDomain: string;
+      crawlPagesTempFileId?: string;
     }) => Promise<{
       artifacts: Array<{
         format: 'html' | 'pdf' | 'epub' | 'epub-manifest';

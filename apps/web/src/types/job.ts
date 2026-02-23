@@ -41,6 +41,7 @@ export type JobRecord = {
   note?: string;
   extractedPreview?: string;
   extractedPages?: ExtractedPageRecord[];
+  crawlPagesTempFileId?: string;
   nextUrl?: string;
   stopReason?: string;
   error?: string;
