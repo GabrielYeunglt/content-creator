@@ -1,7 +1,7 @@
 import type { MetadataFieldType } from './profile';
 
 export type JobMode = 'single' | 'multi';
-export type ExportDestination = 'desktop-artifacts' | 'browser-download';
+export type ExportDestination = string;
 
 export type JobProfile = {
   id: string;
@@ -39,7 +39,7 @@ export function createDefaultJobProfileDraft(): JobProfileDraft {
     totalPagesSelectorOverride: '',
     maxPagesOverride: '',
     metadataOverrides: {},
-    exportDestination: 'desktop-artifacts',
+    exportDestination: '',
     exportFileNameTemplate: '{{job.id}}-{{date}}'
   };
 }

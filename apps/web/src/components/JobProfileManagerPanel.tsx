@@ -101,7 +101,7 @@ export function JobProfileManagerPanel({ websiteProfiles, onJobProfilesChanged }
               <p><strong>{profile.name}</strong></p>
               <p>Base profile: <code>{websiteProfiles.find((p) => p.id === profile.baseProfileId)?.name ?? profile.baseProfileId}</code></p>
               <p>Metadata overrides: {Object.values(profile.metadataOverrides ?? {}).filter((v) => Boolean(v?.trim())).length}</p>
-              <p>Export destination: <code>{profile.exportDestination ?? 'desktop-artifacts'}</code></p>
+              <p>Export destination: <code>{profile.exportDestination?.trim() || 'desktop-artifacts'}</code></p>
               <p>File name format: <code>{profile.exportFileNameTemplate ?? '{{job.id}}-{{date}}'}</code></p>
               <div style={{ display: 'flex', gap: '0.5rem' }}>
                 <button type="button" onClick={() => { setDraft(jobProfileToDraft(profile)); setView({ mode: 'edit', profileId: profile.id }); }}>
@@ -164,15 +164,18 @@ export function JobProfileManagerPanel({ websiteProfiles, onJobProfilesChanged }
           <fieldset style={{ border: '1px solid #ddd', padding: '0.75rem' }}>
             <legend>Export behavior</legend>
             <label>Export destination
-              <select
+              <input
+                type="text"
                 value={draft.exportDestination}
-                onChange={(event) => updateDraft('exportDestination', event.target.value as JobProfileDraft['exportDestination'])}
+                onChange={(event) => updateDraft('exportDestination', event.target.value)}
+                placeholder="Leave empty to use desktop bridge artifacts folder, or enter full folder path"
                 style={{ width: '100%' }}
-              >
-                <option value="desktop-artifacts">Desktop bridge artifacts folder</option>
-                <option value="browser-download">Browser direct download (HTML only fallback)</option>
-              </select>
+              />
             </label>
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+              <button type="button" onClick={() => updateDraft('exportDestination', '')}>Use desktop artifacts folder</button>
+              <button type="button" onClick={() => updateDraft('exportDestination', 'browser-download')}>Use browser download</button>
+            </div>
             <label>Export file name format
               <input
                 value={draft.exportFileNameTemplate}

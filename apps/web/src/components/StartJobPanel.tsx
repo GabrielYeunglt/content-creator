@@ -125,7 +125,7 @@ export function StartJobPanel({ profiles, jobProfiles, onJobCreated, onRequestCr
       return;
     }
 
-    if (selectedJobProfile?.exportDestination === 'desktop-artifacts' && !runtimeBridgeStatus.exportBridgeReady) {
+    if (selectedJobProfile?.exportDestination !== 'browser-download' && !runtimeBridgeStatus.exportBridgeReady) {
       setMessage('Selected job profile requires desktop export destination, but export bridge is not connected.');
       return;
     }
