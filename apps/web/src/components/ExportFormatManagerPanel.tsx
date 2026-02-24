@@ -103,9 +103,9 @@ export function ExportFormatManagerPanel({ jobs }: { jobs: JobRecord[] }) {
   }
 
   return (
-    <section>
-      <h2>Export Format Manager</h2>
-      <p>Configure cover/index/content layouts. Add or remove elements for header, body, and footer.</p>
+    <section className="space-y-3">
+      <h2 className="text-xl font-semibold text-slate-800">Export Format Manager</h2>
+      <p className="text-sm text-slate-600">Configure cover/index/content layouts. Add or remove elements for header, body, and footer.</p>
 
       <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
         <input
@@ -146,7 +146,7 @@ export function ExportFormatManagerPanel({ jobs }: { jobs: JobRecord[] }) {
                 {config[page][section].map((element, index) => (
                   <li key={`${page}-${section}-${index}`} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <code>{element}</code>
-                    <button type="button" onClick={() => handleRemove(page, section, index)}>
+                    <button type="button" onClick={() => handleRemove(page, section, index)} className="rounded border border-rose-300 bg-rose-50 px-2 py-1 text-xs text-rose-700">
                       Remove
                     </button>
                   </li>
@@ -178,14 +178,14 @@ export function ExportFormatManagerPanel({ jobs }: { jobs: JobRecord[] }) {
         </fieldset>
       ))}
 
-      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-        <button type="button" onClick={handleSave}>
+      <div className="flex flex-wrap gap-2">
+        <button type="button" onClick={handleSave} className="rounded bg-blue-700 px-3 py-2 text-xs font-medium text-white">
           Save export format
         </button>
-        <button type="button" onClick={handleResetDefault}>
+        <button type="button" onClick={handleResetDefault} className="rounded border border-slate-300 bg-white px-3 py-2 text-xs">
           Reset form to defaults
         </button>
-        <button type="button" onClick={handleClearAndFallback}>
+        <button type="button" onClick={handleClearAndFallback} className="rounded border border-slate-300 bg-white px-3 py-2 text-xs">
           Clear saved format (use system default)
         </button>
       </div>

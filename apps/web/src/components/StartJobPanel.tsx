@@ -8,6 +8,26 @@ import type { WebsiteProfile } from '../types/profile';
 import { JobDetailsCard } from './JobDetailsCard';
 
 const CREATE_PROFILE_OPTION_VALUE = '__create_profile__';
+const LAST_JOB_PROFILE_OVERRIDES_KEY = 'content-creator:last-job-profile-overrides:v1';
+
+function readRememberedJobProfileOverrides(): Record<string, string> {
+  try {
+    const raw = window.localStorage.getItem(LAST_JOB_PROFILE_OVERRIDES_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<string, string>;
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeRememberedJobProfileOverrides(value: Record<string, string>): void {
+  window.localStorage.setItem(LAST_JOB_PROFILE_OVERRIDES_KEY, JSON.stringify(value));
+}
+
+function waitMs(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
 
 type StartJobPanelProps = {
   profiles: WebsiteProfile[];
@@ -33,6 +53,7 @@ export function StartJobPanel({ profiles, jobProfiles, jobs, onJobCreated, onReq
   const [selectedJobProfileId, setSelectedJobProfileId] = useState('');
   const [message, setMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [rememberedOverrides, setRememberedOverrides] = useState<Record<string, string>>(() => readRememberedJobProfileOverrides());
 
   const runtimeBridgeStatus = useMemo(() => readRuntimeBridgeStatus(), []);
 
@@ -95,10 +116,19 @@ export function StartJobPanel({ profiles, jobProfiles, jobs, onJobCreated, onReq
   );
 
   useEffect(() => {
-    setSelectedJobProfileId((current) => (
-      matchingJobProfiles.some((profile) => profile.id === current) ? current : ''
-    ));
-  }, [matchingJobProfiles]);
+    const rememberedForProfile = rememberedOverrides[selectedProfileId] ?? '';
+    setSelectedJobProfileId((current) => {
+      if (matchingJobProfiles.some((profile) => profile.id === current)) {
+        return current;
+      }
+
+      if (rememberedForProfile && matchingJobProfiles.some((profile) => profile.id === rememberedForProfile)) {
+        return rememberedForProfile;
+      }
+
+      return '';
+    });
+  }, [matchingJobProfiles, rememberedOverrides, selectedProfileId]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -172,19 +202,41 @@ export function StartJobPanel({ profiles, jobProfiles, jobs, onJobCreated, onReq
     );
 
     try {
-      await Promise.all(
-        queuedJobIds.map((jobId, index) => runCrawlJob(jobId, {
+      for (let index = 0; index < queuedJobIds.length; index += 1) {
+        const jobId = queuedJobIds[index];
+        await runCrawlJob(jobId, {
           onJobsUpdated: onJobCreated,
           profile: selectedProfile,
           startUrl: urls[index],
           mode: jobMode,
           jobProfile: selectedJobProfile
-        }))
-      );
+        });
+
+        if (jobMode === 'multi' && index < queuedJobIds.length - 1) {
+          const minSeconds = Math.max(0, Number(selectedProfile.multiJobWaitSecondsRange?.min) || 0);
+          const maxSeconds = Math.max(minSeconds, Number(selectedProfile.multiJobWaitSecondsRange?.max) || minSeconds);
+          const waitSeconds = minSeconds + Math.random() * (maxSeconds - minSeconds);
+          if (waitSeconds > 0) {
+            setMessage(`Waiting ${waitSeconds.toFixed(1)}s before next queued crawl job...`);
+            await waitMs(waitSeconds * 1000);
+          }
+        }
+      }
       setMessage('Crawl run finished. Check Results for pages processed, preview, and stop reason.');
     } finally {
       setIsSubmitting(false);
     }
+  }
+
+  function handleJobProfileChange(value: string) {
+    setSelectedJobProfileId(value);
+    if (!selectedProfileId) {
+      return;
+    }
+
+    const next = { ...rememberedOverrides, [selectedProfileId]: value };
+    setRememberedOverrides(next);
+    writeRememberedJobProfileOverrides(next);
   }
 
   function handleProfileSelectionChange(value: string) {
@@ -253,7 +305,7 @@ export function StartJobPanel({ profiles, jobProfiles, jobs, onJobCreated, onReq
           Job Profile Overrides (optional)
           <select
             value={selectedJobProfileId}
-            onChange={(event) => setSelectedJobProfileId(event.target.value)}
+            onChange={(event) => handleJobProfileChange(event.target.value)}
             className="mt-1 w-full rounded border border-slate-300 bg-white px-2 py-2 text-sm"
             disabled={!selectedProfile}
           >

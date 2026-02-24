@@ -28,8 +28,20 @@ function detectCrawlTotalPages(job: JobRecord): number | null {
   return null;
 }
 
-export function getJobProgressInfo(job: JobRecord): JobProgressInfo {
+export function getJobProgressInfo(job: JobRecord, activeAction: 'crawl' | 'export' = 'crawl'): JobProgressInfo {
   const processed = Math.max(0, job.pagesProcessed ?? 0);
+  if (activeAction === 'export') {
+    if ((job.extractedPages?.length ?? 0) === 0) {
+      return { label: 'Export', detail: 'Waiting for extracted pages', percent: 0 };
+    }
+
+    if (job.status === 'failed') {
+      return { label: 'Export failed', detail: job.note ?? 'Export failed', percent: 100 };
+    }
+
+    return { label: 'Exporting', detail: 'Preparing export artifacts', percent: 35 };
+  }
+
   const crawlTotal = detectCrawlTotalPages(job);
 
   if (job.status === 'queued') {

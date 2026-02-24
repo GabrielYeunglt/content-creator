@@ -393,6 +393,24 @@ export function ProfileEditorForm({ mode, draft, onChange, onSave, onCancel }: P
                 onChange={(event) => onChange('maxPages', Number.parseInt(event.target.value, 10) || 1)}
               />
             </label>
+            <label>
+              Multi-job wait min (seconds)
+              <input
+                type="number"
+                min={0}
+                value={draft.multiJobWaitMinSeconds}
+                onChange={(event) => onChange('multiJobWaitMinSeconds', Math.max(0, Number.parseFloat(event.target.value) || 0))}
+              />
+            </label>
+            <label>
+              Multi-job wait max (seconds)
+              <input
+                type="number"
+                min={0}
+                value={draft.multiJobWaitMaxSeconds}
+                onChange={(event) => onChange('multiJobWaitMaxSeconds', Math.max(0, Number.parseFloat(event.target.value) || 0))}
+              />
+            </label>
           </div>
         </fieldset>
 

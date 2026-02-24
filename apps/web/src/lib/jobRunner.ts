@@ -14,6 +14,12 @@ type RunnerOptions = {
 };
 
 type VirtualBrowserCrawlRequest = {
+  onPageCrawled?: (payload: {
+    pagesProcessed: number;
+    totalPages?: number;
+    currentUrl?: string;
+  }) => void;
+
   startUrl: string;
   domain: string;
   contentRule: {
@@ -265,6 +271,14 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
         selectorType: primaryRule.selectorType,
         selector: jobProfile?.contentSelectorOverride ?? primaryRule.selector,
         timeoutMs: 15000
+      },
+      onPageCrawled: ({ pagesProcessed, totalPages, currentUrl }) => {
+        const detail = totalPages ? `${pagesProcessed}/${totalPages} pages crawled` : `${pagesProcessed} pages crawled`;
+        onJobsUpdated(updateJob(jobId, {
+          pagesProcessed,
+          lastVisitedUrl: currentUrl,
+          note: `Crawling in progress: ${detail}.`
+        }));
       }
     })));
 
