@@ -558,7 +558,7 @@ async function prepareEpubContent(
     chapters.map(async (chapter, chapterIndex) => ({
       title: chapter.title,
       data: await replaceDataImageUrls(chapter.bodyHtml, assetDir, chapterIndex, createHash, fs, path),
-      excludeFromToc: true
+      excludeFromToc: false
     }))
   );
 }
