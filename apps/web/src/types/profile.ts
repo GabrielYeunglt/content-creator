@@ -65,6 +65,10 @@ export type WebsiteProfile = {
   paginationRule: PaginationRule;
   totalPagesRule?: TotalPagesRule;
   stopRules: StopRules;
+  multiJobWaitSecondsRange?: {
+    min: number;
+    max: number;
+  };
   multiUrlOverrides?: Partial<Record<MetadataFieldType | 'other', string>>;
   createdAt: string;
   updatedAt: string;
@@ -177,6 +181,8 @@ export type ProfileDraft = {
   extractionRules: ExtractionRuleDraft[];
   multiUrlOverrides: Partial<Record<MetadataFieldType | 'other', string>>;
   maxPages: number;
+  multiJobWaitMinSeconds: number;
+  multiJobWaitMaxSeconds: number;
 };
 
 export function createDefaultProfileDraft(): ProfileDraft {
@@ -186,6 +192,8 @@ export function createDefaultProfileDraft(): ProfileDraft {
     profileType: 'single-url',
     extractionRules: createDefaultExtractionRules(),
     multiUrlOverrides: {},
-    maxPages: 100
+    maxPages: 100,
+    multiJobWaitMinSeconds: 0,
+    multiJobWaitMaxSeconds: 0
   };
 }

@@ -101,6 +101,10 @@ function sanitizeProfile(candidate: Partial<WebsiteProfile>): WebsiteProfile | n
       stopWhenUrlVisited: Boolean(candidate.stopRules.stopWhenUrlVisited),
       maxPages: Math.max(1, Number(candidate.stopRules.maxPages) || createDefaultProfileDraft().maxPages)
     },
+    multiJobWaitSecondsRange: {
+      min: Math.max(0, Number(candidate.multiJobWaitSecondsRange?.min) || 0),
+      max: Math.max(0, Number(candidate.multiJobWaitSecondsRange?.max) || 0)
+    },
     multiUrlOverrides: normalizeMetadataOverrides(candidate.multiUrlOverrides as Record<string, string> | undefined),
     createdAt: candidate.createdAt ?? new Date().toISOString(),
     updatedAt: candidate.updatedAt ?? new Date().toISOString()
@@ -114,6 +118,12 @@ function validateProfileDraft(draft: ProfileDraft): { ok: true } | { ok: false; 
   }
   if (!domain || !domain.includes('.')) {
     return { ok: false, error: 'A valid domain is required (example.com).' };
+  }
+
+  const waitMin = Math.max(0, Number(draft.multiJobWaitMinSeconds) || 0);
+  const waitMax = Math.max(0, Number(draft.multiJobWaitMaxSeconds) || 0);
+  if (waitMin > waitMax) {
+    return { ok: false, error: 'Multi-job wait range min must be less than or equal to max.' };
   }
 
   const invalidRequiredRule = draft.extractionRules.find(
@@ -193,6 +203,10 @@ function buildProfile(draft: ProfileDraft, id: string, createdAt: string): Websi
       stopWhenUrlVisited: true,
       maxPages: Math.max(1, draft.maxPages)
     },
+    multiJobWaitSecondsRange: {
+      min: Math.max(0, Number(draft.multiJobWaitMinSeconds) || 0),
+      max: Math.max(0, Number(draft.multiJobWaitMaxSeconds) || 0)
+    },
     multiUrlOverrides: normalizeMetadataOverrides(draft.multiUrlOverrides as Record<string, string>),
     createdAt,
     updatedAt: new Date().toISOString()
@@ -268,7 +282,9 @@ export function profileToDraft(profile: WebsiteProfile): ProfileDraft {
       }
     ],
     multiUrlOverrides: normalizeMetadataOverrides(profile.multiUrlOverrides as Record<string, string> | undefined),
-    maxPages: profile.stopRules.maxPages
+    maxPages: profile.stopRules.maxPages,
+    multiJobWaitMinSeconds: Math.max(0, Number(profile.multiJobWaitSecondsRange?.min) || 0),
+    multiJobWaitMaxSeconds: Math.max(0, Number(profile.multiJobWaitSecondsRange?.max) || 0)
   };
 }
 

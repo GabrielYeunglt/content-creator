@@ -3,7 +3,6 @@ import { ExportFormatManagerPanel } from './components/ExportFormatManagerPanel'
 import { JobProfileManagerPanel } from './components/JobProfileManagerPanel';
 import { ProfileManagerPanel } from './components/ProfileManagerPanel';
 import { ResultsPanel } from './components/ResultsPanel';
-import { SettingsPanel } from './components/SettingsPanel';
 import { StartJobPanel } from './components/StartJobPanel';
 import { readJobs } from './lib/jobStorage';
 import { readJobProfiles } from './lib/jobProfileStorage';
@@ -17,7 +16,6 @@ type AppSection =
   | 'profile-manager'
   | 'job-profile-manager'
   | 'export-format-manager'
-  | 'settings'
   | 'results';
 
 const sections: Array<{ id: AppSection; label: string }> = [
@@ -25,7 +23,6 @@ const sections: Array<{ id: AppSection; label: string }> = [
   { id: 'profile-manager', label: 'Profile Manager' },
   { id: 'job-profile-manager', label: 'Job Profile Manager' },
   { id: 'export-format-manager', label: 'Export Format Manager' },
-  { id: 'settings', label: 'Settings' },
   { id: 'results', label: 'Results' }
 ];
 
@@ -83,7 +80,6 @@ export function App() {
           createProfileRequestNonce={createProfileRequestNonce}
         />
       )}
-      {activeSection === 'settings' && <SettingsPanel />}
       {activeSection === 'export-format-manager' && <ExportFormatManagerPanel jobs={jobs} />}
       {activeSection === 'job-profile-manager' && (
         <JobProfileManagerPanel websiteProfiles={profiles} onJobProfilesChanged={setJobProfiles} />

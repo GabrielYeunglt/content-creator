@@ -70,6 +70,11 @@ export type VirtualBrowserCrawlOptions = {
   interactionSteps?: CrawlInteractionStep[];
   metadataRules?: CrawlMetadataRule[];
   totalPagesRule?: CrawlTotalPagesRule;
+  onPageCrawled?: (payload: {
+    pagesProcessed: number;
+    totalPages?: number;
+    currentUrl?: string;
+  }) => void;
 };
 
 export type CrawledPage = {
@@ -423,7 +428,8 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
     contentReadySelector,
     interactionSteps = [],
     metadataRules = [],
-    totalPagesRule
+    totalPagesRule,
+    onPageCrawled
   } = options;
 
   console.log('Starting crawl with options:', options);
@@ -621,6 +627,12 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
           metadata
         });
 
+        onPageCrawled?.({
+          pagesProcessed: pages.length,
+          totalPages: totalPagesTarget ?? undefined,
+          currentUrl
+        });
+
         console.log(`[crawl] page saved url=${currentUrl} stylesheets=${domAssets.stylesheets.length}+${networkStylesheets.size} scripts=${domAssets.scripts.length}+${networkScripts.size}`);
         previousExtractedValue = extractedValue;
 
@@ -631,6 +643,7 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
           if (extractedTotalPages !== null) {
             totalPagesTarget = extractedTotalPages;
             notes.push(`Total pages target extracted: ${extractedTotalPages}.`);
+            onPageCrawled?.({ pagesProcessed: pages.length, totalPages: totalPagesTarget, currentUrl });
             console.log(`[crawl] total pages target extracted=${extractedTotalPages}`);
           }
         }

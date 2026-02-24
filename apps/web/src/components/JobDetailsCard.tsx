@@ -3,6 +3,11 @@ import { getJobProgressInfo } from './jobProgress';
 
 type JobDetailsCardProps = {
   job: JobRecord;
+  isExporting?: boolean;
+  onExportHtml?: (job: JobRecord) => void;
+  onExportPdf?: (job: JobRecord) => void;
+  onExportEpub?: (job: JobRecord) => void;
+  onExportAll?: (job: JobRecord) => void;
 };
 
 function stopReasonHelp(stopReason: string | undefined): string | null {
@@ -21,8 +26,16 @@ function statusColor(status: JobStatus): string {
   return 'text-rose-700';
 }
 
-export function JobDetailsCard({ job }: JobDetailsCardProps) {
-  const progress = getJobProgressInfo(job);
+export function JobDetailsCard({
+  job,
+  isExporting = false,
+  onExportHtml,
+  onExportPdf,
+  onExportEpub,
+  onExportAll
+}: JobDetailsCardProps) {
+  const progress = getJobProgressInfo(job, isExporting ? 'export' : 'crawl');
+  const canExport = Boolean(job.extractedPages && job.extractedPages.length > 0);
 
   return (
     <article className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
@@ -33,7 +46,7 @@ export function JobDetailsCard({ job }: JobDetailsCardProps) {
         </div>
         <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
           <div
-            className="h-full rounded-full bg-blue-600 transition-all"
+            className={`h-full rounded-full transition-all ${isExporting ? 'bg-indigo-600' : 'bg-blue-600'}`}
             style={{ width: `${progress.percent}%` }}
           />
         </div>
@@ -53,6 +66,19 @@ export function JobDetailsCard({ job }: JobDetailsCardProps) {
         {job.stopReason && <p><strong>Stop reason:</strong> {job.stopReason}</p>}
         {stopReasonHelp(job.stopReason) && <p className="text-amber-700"><strong>Guidance:</strong> {stopReasonHelp(job.stopReason)}</p>}
         {job.error && <p className="text-rose-700"><strong>Error:</strong> {job.error}</p>}
+      </div>
+
+      <div className="mt-4 rounded-md border border-slate-200 bg-slate-50 p-3">
+        <h4 className="text-sm font-semibold text-slate-800">Export actions</h4>
+        {!canExport && <p className="mt-2 text-xs text-slate-500">Export becomes available after crawl has extracted pages.</p>}
+        {canExport && (
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button type="button" onClick={() => onExportHtml?.(job)} className="rounded bg-slate-800 px-2 py-1 text-xs text-white">Export HTML</button>
+            <button type="button" onClick={() => onExportPdf?.(job)} className="rounded bg-indigo-700 px-2 py-1 text-xs text-white">Export PDF</button>
+            <button type="button" onClick={() => onExportEpub?.(job)} className="rounded bg-emerald-700 px-2 py-1 text-xs text-white">Export EPUB</button>
+            <button type="button" onClick={() => onExportAll?.(job)} className="rounded bg-blue-700 px-2 py-1 text-xs text-white">Export all</button>
+          </div>
+        )}
       </div>
 
       <div className="mt-4">

@@ -42,6 +42,11 @@ declare global {
         selector: string;
         timeoutMs?: number;
       };
+      onPageCrawled?: (payload: {
+        pagesProcessed: number;
+        totalPages?: number;
+        currentUrl?: string;
+      }) => void;
     }) => Promise<{
       pagesProcessed: number;
       stopReason: string;

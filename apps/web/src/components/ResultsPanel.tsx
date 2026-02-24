@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { exportJobAllViaDesktop, exportJobAsEpub, exportJobAsHtml, exportJobAsPdf } from '../lib/exportActions';
 import type { JobRecord, JobStatus } from '../types/job';
 import { JobDetailsCard } from './JobDetailsCard';
@@ -19,44 +19,33 @@ function statusColor(status: JobStatus): string {
 export function ResultsPanel({ jobs, onJobsUpdated }: ResultsPanelProps) {
   const [detailsJobId, setDetailsJobId] = useState<string | null>(null);
   const [exportingJobId, setExportingJobId] = useState<string | null>(null);
+  const [exportPercent, setExportPercent] = useState(0);
 
-  async function handleExportHtml(job: JobRecord) {
-    setExportingJobId(job.id);
-    try {
-      const updated = await exportJobAsHtml(job);
-      if (updated) onJobsUpdated(updated);
-    } finally {
-      setExportingJobId(null);
+  useEffect(() => {
+    if (!exportingJobId) {
+      setExportPercent(0);
+      return;
     }
-  }
 
-  async function handleExportPdf(job: JobRecord) {
+    setExportPercent(0);
+    const interval = window.setInterval(() => {
+      setExportPercent((current) => Math.min(92, current + 8));
+    }, 250);
+
+    return () => window.clearInterval(interval);
+  }, [exportingJobId]);
+
+  async function runExport(job: JobRecord, action: (value: JobRecord) => Promise<JobRecord[] | null>) {
     setExportingJobId(job.id);
     try {
-      const updated = await exportJobAsPdf(job);
+      const updated = await action(job);
+      setExportPercent(100);
       if (updated) onJobsUpdated(updated);
     } finally {
-      setExportingJobId(null);
-    }
-  }
-
-  async function handleExportEpub(job: JobRecord) {
-    setExportingJobId(job.id);
-    try {
-      const updated = await exportJobAsEpub(job);
-      if (updated) onJobsUpdated(updated);
-    } finally {
-      setExportingJobId(null);
-    }
-  }
-
-  async function handleExportAll(job: JobRecord) {
-    setExportingJobId(job.id);
-    try {
-      const updated = await exportJobAllViaDesktop(job);
-      if (updated) onJobsUpdated(updated);
-    } finally {
-      setExportingJobId(null);
+      window.setTimeout(() => {
+        setExportingJobId(null);
+        setExportPercent(0);
+      }, 250);
     }
   }
 
@@ -78,7 +67,14 @@ export function ResultsPanel({ jobs, onJobsUpdated }: ResultsPanelProps) {
           >
             ← Back to results table
           </button>
-          <JobDetailsCard job={selectedJob} />
+          <JobDetailsCard
+            job={selectedJob}
+            isExporting={exportingJobId === selectedJob.id}
+            onExportHtml={(job) => void runExport(job, exportJobAsHtml)}
+            onExportPdf={(job) => void runExport(job, exportJobAsPdf)}
+            onExportEpub={(job) => void runExport(job, exportJobAsEpub)}
+            onExportAll={(job) => void runExport(job, exportJobAllViaDesktop)}
+          />
         </div>
       )}
 
@@ -87,65 +83,36 @@ export function ResultsPanel({ jobs, onJobsUpdated }: ResultsPanelProps) {
           <table className="table-generic">
             <thead className="bg-slate-50">
               <tr>
-                <th >Profile</th>
-                <th >Status</th>
-                <th >Created</th>
-                <th >Completed</th>
-                <th >Pages</th>
-                <th >Progress</th>
-                <th >Actions</th>
+                <th>Profile</th><th>Status</th><th>Created</th><th>Completed</th><th>Pages</th><th>Progress</th><th>Actions</th>
               </tr>
             </thead>
-            <tbody >
-              {jobs.map((job) => (
-                <tr key={job.id} className="align-top">
-                  <td >
-                    <p className="font-medium text-slate-900">{job.profileName}</p>
-                    <p className="text-xs text-slate-500">{job.profileDomain}</p>
-                  </td>
-                  <td ><span className={statusColor(job.status)}>{job.status}</span></td>
-                  <td >{new Date(job.createdAt).toLocaleString()}</td>
-                  <td >{job.completedAt ? new Date(job.completedAt).toLocaleString() : '-'}</td>
-                  <td >{typeof job.pagesProcessed === 'number' ? job.pagesProcessed : '-'}</td>
-                  <td>
-                    {(() => {
-                      const progress = getJobProgressInfo(job);
-                      const isExporting = exportingJobId === job.id;
-                      const estimatedTotalSteps = Math.max(3, (job.extractedPages?.length ?? job.pagesProcessed ?? 1) + 2);
-                      const exportPercent = isExporting ? 70 : progress.percent;
-                      return (
-                        <div className="min-w-44">
-                          <div className="mb-1 flex items-center justify-between text-[11px] text-slate-600">
-                            <span>{isExporting ? 'Exporting' : progress.label}</span>
-                            <span>{Math.round(exportPercent)}%</span>
-                          </div>
-                          <div className="h-2 overflow-hidden rounded-full bg-slate-200">
-                            <div className={`h-full rounded-full ${isExporting ? 'bg-indigo-600' : 'bg-blue-600'} transition-all`} style={{ width: `${exportPercent}%` }} />
-                          </div>
-                          <p className="mt-1 text-[11px] text-slate-500">
-                            {isExporting
-                              ? `${Math.round(estimatedTotalSteps * 0.7)}/${estimatedTotalSteps} estimated export steps`
-                              : progress.detail}
-                          </p>
-                        </div>
-                      );
-                    })()}
-                  </td>
-                  <td >
-                    <div className="flex flex-wrap gap-2">
-                      <button type="button" onClick={() => setDetailsJobId(job.id)} className="rounded bg-slate-600 px-2 py-1 text-xs text-white">View details</button>
-                      {job.extractedPages && job.extractedPages.length > 0 && (
-                        <>
-                          <button type="button" onClick={() => void handleExportHtml(job)} className="rounded bg-slate-800 px-2 py-1 text-xs text-white">Export HTML</button>
-                          <button type="button" onClick={() => void handleExportPdf(job)} className="rounded bg-indigo-700 px-2 py-1 text-xs text-white">Export PDF</button>
-                          <button type="button" onClick={() => void handleExportEpub(job)} className="rounded bg-emerald-700 px-2 py-1 text-xs text-white">Export EPUB</button>
-                          <button type="button" onClick={() => void handleExportAll(job)} className="rounded bg-blue-700 px-2 py-1 text-xs text-white">Export all</button>
-                        </>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
+            <tbody>
+              {jobs.map((job) => {
+                const isExporting = exportingJobId === job.id;
+                const progress = getJobProgressInfo(job, isExporting ? 'export' : 'crawl');
+                const percent = isExporting ? exportPercent : progress.percent;
+                return (
+                  <tr key={job.id} className="align-top">
+                    <td><p className="font-medium text-slate-900">{job.profileName}</p><p className="text-xs text-slate-500">{job.profileDomain}</p></td>
+                    <td><span className={statusColor(job.status)}>{job.status}</span></td>
+                    <td>{new Date(job.createdAt).toLocaleString()}</td>
+                    <td>{job.completedAt ? new Date(job.completedAt).toLocaleString() : '-'}</td>
+                    <td>{typeof job.pagesProcessed === 'number' ? job.pagesProcessed : '-'}</td>
+                    <td>
+                      <div className="min-w-44">
+                        <div className="mb-1 flex items-center justify-between text-[11px] text-slate-600"><span>{progress.label}</span><span>{Math.round(percent)}%</span></div>
+                        <div className="h-2 overflow-hidden rounded-full bg-slate-200"><div className={`h-full rounded-full ${isExporting ? 'bg-indigo-600' : 'bg-blue-600'} transition-all`} style={{ width: `${percent}%` }} /></div>
+                        <p className="mt-1 text-[11px] text-slate-500">{progress.detail}</p>
+                      </div>
+                    </td>
+                    <td>
+                      <div className="flex flex-wrap gap-2">
+                        <button type="button" onClick={() => setDetailsJobId(job.id)} className="rounded bg-slate-600 px-2 py-1 text-xs text-white">View details</button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
