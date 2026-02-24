@@ -48,6 +48,8 @@ export type JobRecord = {
   pagesProcessed?: number;
   lastVisitedUrl?: string;
   consolidatedDocument?: ConsolidatedDocumentRecord;
+  exportDestination?: string;
+  exportFileNameTemplate?: string;
   exportedArtifacts?: ExportedArtifactRecord[];
   logs?: Array<{
     at: string;

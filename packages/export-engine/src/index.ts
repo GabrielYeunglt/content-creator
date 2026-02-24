@@ -14,32 +14,86 @@ export type ExportArtifact = {
   path: string;
 };
 
+export type ExportPageElement = string;
+
+export type ExportPageTemplate = {
+  header: ExportPageElement[];
+  body: ExportPageElement[];
+  footer: ExportPageElement[];
+};
+
+export type ExportLayout = {
+  disableTableOfContents: boolean;
+  coverImageSource: 'metadata.cover' | 'first-image-from-url';
+  coverPage: ExportPageTemplate;
+  indexPage: ExportPageTemplate;
+  contentPage: ExportPageTemplate;
+};
+
 export type ExportPipelineOptions = {
   document: CanonicalDocument;
   outputHtmlPath?: string;
   outputPdfPath?: string;
   outputEpubPath?: string;
   outputEpubManifestPath?: string;
+  exportLayout?: ExportLayout;
 };
 
-export function renderCanonicalHtml(document: CanonicalDocument): string {
-  const chapterHtml = document.chapters
-    .map(
-      (chapter) => {
-        const body = renderChapterBody(chapter.bodyHtml);
+const defaultExportLayout: ExportLayout = {
+  disableTableOfContents: false,
+  coverImageSource: 'metadata.cover',
+  coverPage: {
+    header: ['document.title'],
+    body: ['metadata.list'],
+    footer: []
+  },
+  indexPage: {
+    header: ['label.index'],
+    body: ['index.chapterList'],
+    footer: []
+  },
+  contentPage: {
+    header: ['chapter.title'],
+    body: ['chapter.bodyHtml'],
+    footer: ['chapter.sourceUrl']
+  }
+};
+
+type StructuredPage = {
+  kind: 'cover' | 'index' | 'content';
+  title: string;
+  sourceUrl?: string;
+  headerHtml: string;
+  bodyHtml: string;
+  footerHtml: string;
+};
+
+export function renderCanonicalHtml(document: CanonicalDocument, exportLayout?: ExportLayout): string {
+  const layout = sanitizeExportLayout(exportLayout);
+  const structuredPages = buildStructuredPages(document, layout);
+
+  const pageHtml = structuredPages
+    .map((page) => {
+      if (page.kind === 'content') {
         return `
-        <section data-source-url="${escapeHtml(chapter.sourceUrl)}">
-          <h2>${escapeHtml(chapter.title)}</h2>
-          <div class="chapter-body">${body}</div>
+        <section data-source-url="${escapeHtml(page.sourceUrl ?? '')}">
+          ${page.headerHtml ? `<header class="section-header">${page.headerHtml}</header>` : ''}
+          <div class="section-body">${page.bodyHtml}</div>
+          ${page.footerHtml ? `<footer class="section-footer">${page.footerHtml}</footer>` : ''}
         </section>
-      `
+      `;
       }
-    )
+
+      return `
+      <section>
+        ${page.headerHtml ? `<header class="section-header">${page.headerHtml}</header>` : ''}
+        <div class="section-body">${page.bodyHtml}</div>
+        ${page.footerHtml ? `<footer class="section-footer">${page.footerHtml}</footer>` : ''}
+      </section>
+    `;
+    })
     .join('\n');
 
-  const metadataHtml = Object.entries(document.metadata)
-    .map(([key, value]) => `<li><strong>${escapeHtml(toLabel(key))}:</strong> ${escapeHtml(value)}</li>`)
-    .join('');
   return `<!doctype html>
 <html lang="en">
   <head>
@@ -48,22 +102,141 @@ export function renderCanonicalHtml(document: CanonicalDocument): string {
     <title>${escapeHtml(document.title)}</title>
     <style>
       body { font-family: Georgia, serif; margin: 40px auto; max-width: 860px; line-height: 1.55; padding: 0 16px; }
-      h1 { border-bottom: 1px solid #ddd; padding-bottom: 12px; }
-      section { margin: 28px 0; page-break-inside: avoid; }
-      .chapter-body { margin-top: 12px; }
-      .chapter-body img { max-width: 100%; height: auto; display: block; }
-      .meta { color: #666; font-size: 0.9rem; }
-      .meta-list { color: #444; font-size: 0.95rem; }
+      section { margin: 28px 0; page-break-inside: avoid; border-bottom: 1px solid #eee; padding-bottom: 20px; }
+      section:last-of-type { border-bottom: none; }
+      .section-header { margin-bottom: 12px; }
+      .section-body img { max-width: 100%; height: auto; display: block; }
+      .section-footer { margin-top: 12px; color: #666; font-size: 0.9rem; }
+      .cc-meta-list, .cc-index-list { margin: 0.5rem 0; padding-left: 1.25rem; }
+      .cc-label { color: #666; font-size: 0.95rem; }
+      .cc-index-title { font-weight: 700; font-size: 1.1rem; }
     </style>
   </head>
   <body>
-    <h1>${escapeHtml(document.title)}</h1>
-    <p class="meta">Source domain: ${escapeHtml(document.sourceDomain)}</p>
-    <p class="meta">Generated at: ${escapeHtml(document.generatedAt)}</p>
-    ${metadataHtml ? `<ul class="meta-list">${metadataHtml}</ul>` : ''}
-    ${chapterHtml}
+    ${pageHtml}
   </body>
 </html>`;
+}
+
+function buildStructuredPages(document: CanonicalDocument, layout: ExportLayout): StructuredPage[] {
+  const pages: StructuredPage[] = [];
+
+  pages.push({
+    kind: 'cover',
+    title: document.title,
+    headerHtml: renderTemplateElements(layout.coverPage.header, document),
+    bodyHtml: renderTemplateElements(layout.coverPage.body, document),
+    footerHtml: renderTemplateElements(layout.coverPage.footer, document)
+  });
+
+  if (!layout.disableTableOfContents) {
+    pages.push({
+      kind: 'index',
+      title: 'Index',
+      headerHtml: renderTemplateElements(layout.indexPage.header, document),
+      bodyHtml: renderTemplateElements(layout.indexPage.body, document),
+      footerHtml: renderTemplateElements(layout.indexPage.footer, document)
+    });
+  }
+
+  for (const chapter of document.chapters) {
+    pages.push({
+      kind: 'content',
+      title: chapter.title,
+      sourceUrl: chapter.sourceUrl,
+      headerHtml: renderTemplateElements(layout.contentPage.header, document, chapter),
+      bodyHtml: renderTemplateElements(layout.contentPage.body, document, chapter),
+      footerHtml: renderTemplateElements(layout.contentPage.footer, document, chapter)
+    });
+  }
+
+  return pages;
+}
+
+function renderTemplateElements(elements: ExportPageElement[], document: CanonicalDocument, chapter?: CanonicalDocument['chapters'][number]): string {
+  return elements
+    .map((element) => renderElementValue(element, document, chapter))
+    .filter((value) => value.trim().length > 0)
+    .join('\n');
+}
+
+function renderElementValue(element: ExportPageElement, document: CanonicalDocument, chapter?: CanonicalDocument['chapters'][number]): string {
+  if (element === 'document.title') {
+    return `<h1>${escapeHtml(document.title)}</h1>`;
+  }
+  if (element === 'document.sourceDomain') {
+    return `<p class="cc-label">Source domain: ${escapeHtml(document.sourceDomain)}</p>`;
+  }
+  if (element === 'document.generatedAt') {
+    return `<p class="cc-label">Generated at: ${escapeHtml(document.generatedAt)}</p>`;
+  }
+  if (element === 'metadata.list') {
+    const metadataHtml = Object.entries(document.metadata)
+      .map(([key, value]) => `<li><strong>${escapeHtml(toLabel(key))}:</strong> ${escapeHtml(value)}</li>`)
+      .join('');
+    return metadataHtml ? `<ul class="cc-meta-list">${metadataHtml}</ul>` : '';
+  }
+  if (element.startsWith('metadata.')) {
+    const key = element.slice('metadata.'.length);
+    const value = document.metadata[key];
+    return value ? `<p><strong>${escapeHtml(toLabel(key))}:</strong> ${escapeHtml(value)}</p>` : '';
+  }
+  if (element === 'index.chapterList') {
+    const items = document.chapters
+      .map((chapter, index) => `<li>${index + 1}. ${escapeHtml(chapter.title)}</li>`)
+      .join('');
+    return `<ol class="cc-index-list">${items}</ol>`;
+  }
+  if (element === 'chapter.title') {
+    return chapter ? `<h2>${escapeHtml(chapter.title)}</h2>` : '';
+  }
+  if (element === 'chapter.sourceUrl') {
+    return chapter ? `<p class="cc-label">Source URL: ${escapeHtml(chapter.sourceUrl)}</p>` : '';
+  }
+  if (element === 'chapter.bodyHtml') {
+    return chapter ? `<div class="chapter-body">${renderChapterBody(chapter.bodyHtml)}</div>` : '';
+  }
+  if (element.startsWith('chapter.metadata.')) {
+    const key = element.slice('chapter.metadata.'.length);
+    const value = chapter?.metadata?.[key];
+    return value ? `<p><strong>${escapeHtml(toLabel(key))}:</strong> ${escapeHtml(value)}</p>` : '';
+  }
+  if (element === 'label.index') {
+    return '<p class="cc-index-title">Index</p>';
+  }
+
+  return '';
+}
+
+function sanitizeExportLayout(candidate?: ExportLayout): ExportLayout {
+  if (!candidate) {
+    return defaultExportLayout;
+  }
+
+  return {
+    disableTableOfContents: Boolean(candidate.disableTableOfContents),
+    coverImageSource: candidate.coverImageSource === 'first-image-from-url' ? 'first-image-from-url' : 'metadata.cover',
+    coverPage: sanitizeTemplate(candidate.coverPage, defaultExportLayout.coverPage),
+    indexPage: sanitizeTemplate(candidate.indexPage, defaultExportLayout.indexPage),
+    contentPage: sanitizeTemplate(candidate.contentPage, defaultExportLayout.contentPage)
+  };
+}
+
+function sanitizeTemplate(candidate: ExportPageTemplate | undefined, fallback: ExportPageTemplate): ExportPageTemplate {
+  return {
+    header: sanitizeElements(candidate?.header, fallback.header),
+    body: sanitizeElements(candidate?.body, fallback.body),
+    footer: sanitizeElements(candidate?.footer, fallback.footer)
+  };
+}
+
+function sanitizeElements(candidate: unknown, fallback: string[]): string[] {
+  if (!Array.isArray(candidate)) {
+    return fallback;
+  }
+
+  const cleaned = candidate.filter((value): value is string => typeof value === 'string' && value.trim().length > 0);
+  return cleaned;
 }
 
 function renderChapterBody(bodyHtml: string): string {
@@ -101,18 +274,18 @@ export function renderEpubLikeManifest(document: CanonicalDocument): string {
 }
 
 export async function runExportPipeline(options: ExportPipelineOptions): Promise<ExportArtifact[]> {
-  const { document, outputHtmlPath, outputPdfPath, outputEpubPath, outputEpubManifestPath } = options;
+  const { document, outputHtmlPath, outputPdfPath, outputEpubPath, outputEpubManifestPath, exportLayout } = options;
 
   const artifacts: ExportArtifact[] = [];
 
   if (outputHtmlPath) {
-    const html = renderCanonicalHtml(document);
+    const html = renderCanonicalHtml(document, exportLayout);
     await writeTextFile(outputHtmlPath, html);
     artifacts.push({ format: 'html', path: outputHtmlPath });
   }
 
   if (outputPdfPath) {
-    await renderPdfFromCanonicalDocument({ document, outputPdfPath });
+    await renderPdfFromCanonicalDocument({ document, outputPdfPath, exportLayout });
     artifacts.push({ format: 'pdf', path: outputPdfPath });
   }
 
@@ -123,7 +296,7 @@ export async function runExportPipeline(options: ExportPipelineOptions): Promise
   }
 
   if (outputEpubPath) {
-    await renderEpubFromCanonicalDocument({ document, outputEpubPath });
+    await renderEpubFromCanonicalDocument({ document, outputEpubPath, exportLayout });
     artifacts.push({ format: 'epub', path: outputEpubPath });
   }
 
@@ -139,10 +312,11 @@ async function writeTextFile(path: string, content: string): Promise<void> {
 async function renderPdfFromCanonicalDocument(params: {
   document: CanonicalDocument;
   outputPdfPath: string;
+  exportLayout?: ExportLayout;
 }): Promise<void> {
-  const { document, outputPdfPath } = params;
+  const { document, outputPdfPath, exportLayout } = params;
 
-  const html = renderCanonicalHtml(document);
+  const html = renderCanonicalHtml(document, exportLayout);
   const playwrightModuleName = 'playwright';
   const playwrightModule = (await import(/* @vite-ignore */ playwrightModuleName)) as { chromium: { launch: (opts: { headless: boolean }) => Promise<any> } };
 
@@ -169,8 +343,9 @@ async function renderPdfFromCanonicalDocument(params: {
 async function renderEpubFromCanonicalDocument(params: {
   document: CanonicalDocument;
   outputEpubPath: string;
+  exportLayout?: ExportLayout;
 }): Promise<void> {
-  const { document, outputEpubPath } = params;
+  const { document, outputEpubPath, exportLayout } = params;
 
   try {
     const epubModuleName = 'epub-gen';
@@ -182,15 +357,23 @@ async function renderEpubFromCanonicalDocument(params: {
         cover?: string;
         description?: string;
         language?: string;
+        appendChapterTitles?: boolean;
+        customOpfTemplate?: string;
         content: Array<{ title: string; data: string }>;
       },
       output: string
     ) => { promise?: Promise<unknown> };
 
-    const content = await prepareEpubContent(document.chapters.map((chapter) => ({
-      title: chapter.title,
-      bodyHtml: renderChapterBody(chapter.bodyHtml)
-    })));
+    const layout = sanitizeExportLayout(exportLayout);
+    const structuredPages = buildStructuredPages(document, layout);
+    const assetDir = await createEpubAssetDirectory();
+    const content = await prepareEpubContent(
+      structuredPages.map((page) => ({
+        title: page.title,
+        bodyHtml: [page.headerHtml, page.bodyHtml, page.footerHtml].filter(Boolean).join('\n')
+      })),
+      assetDir
+    );
 
     const unresolvedDataUrlCount = content.reduce(
       (count, chapter) => count + (chapter.data.match(/data:image\//gi)?.length ?? 0),
@@ -200,14 +383,24 @@ async function renderEpubFromCanonicalDocument(params: {
       throw new Error(`EPUB content still contains ${unresolvedDataUrlCount} unresolved data:image URL(s) after asset replacement.`);
     }
 
+    const bookTitle = getMetadataValue(document, ['title', 'name']) || document.title;
+    const bookAuthor = getMetadataValue(document, ['author']) || document.sourceDomain;
+    const bookPublisher = getMetadataValue(document, ['publisher']);
+    const bookSeries = getMetadataValue(document, ['series']);
+    const bookDescription = getMetadataValue(document, ['description']);
+    const bookLanguage = getMetadataValue(document, ['language']);
+    const bookCover = await resolveBookCover(document, layout.coverImageSource, assetDir);
+
     const instance = new EpubConstructor(
       {
-        title: document.title,
-        author: document.metadata.author || document.sourceDomain,
-        publisher: document.metadata.publisher,
-        cover: document.metadata.cover,
-        description: document.metadata.description,
-        language: document.metadata.language,
+        title: bookTitle,
+        author: bookAuthor,
+        publisher: bookPublisher,
+        cover: bookCover,
+        description: bookDescription,
+        language: bookLanguage,
+        appendChapterTitles: false,
+        customOpfTemplate: buildCustomOpfTemplate({ series: bookSeries }),
         content
       },
       outputEpubPath
@@ -232,10 +425,85 @@ async function renderEpubFromCanonicalDocument(params: {
   }
 }
 
+async function resolveBookCover(
+  document: CanonicalDocument,
+  coverImageSource: ExportLayout['coverImageSource'],
+  assetDir: string
+): Promise<string | undefined> {
+  const maybeDataUrlToPath = async (value: string | undefined): Promise<string | undefined> => {
+    if (!value) {
+      return undefined;
+    }
+
+    if (!/^data:image\//i.test(value)) {
+      return value;
+    }
+
+    return writeDataImageToAsset(value, assetDir, 'cover');
+  };
+
+  if (coverImageSource === 'first-image-from-url') {
+    const firstImage = findFirstImageInDocument(document);
+    if (firstImage) {
+      return maybeDataUrlToPath(firstImage);
+    }
+  }
+
+  return maybeDataUrlToPath(getMetadataValue(document, ['cover']));
+}
+
+function findFirstImageInDocument(document: CanonicalDocument): string | undefined {
+  for (const chapter of document.chapters) {
+    const body = chapter.bodyHtml ?? '';
+    const imageMatch = body.match(/<img\b[^>]*\bsrc=["']([^"']+)["'][^>]*>/i);
+    if (imageMatch?.[1]) {
+      return imageMatch[1];
+    }
+
+    if (/^data:image\//i.test(body.trim())) {
+      return body.trim();
+    }
+
+    const urlMatch = body.trim().match(/^https?:\/\/\S+$/i);
+    if (urlMatch?.[0]) {
+      return urlMatch[0];
+    }
+  }
+
+  return undefined;
+}
+
+function getMetadataValue(document: CanonicalDocument, candidates: string[]): string | undefined {
+  const metadataEntries = Object.entries(document.metadata);
+
+  for (const key of candidates) {
+    const direct = document.metadata[key];
+    if (direct?.trim()) {
+      return direct.trim();
+    }
+
+    const lowerKey = key.toLowerCase();
+    const matched = metadataEntries.find(([metadataKey, value]) => metadataKey.toLowerCase() === lowerKey && value.trim());
+    if (matched) {
+      return matched[1].trim();
+    }
+  }
+
+  return undefined;
+}
+
+function buildCustomOpfTemplate(params: { series?: string }): string | undefined {
+  if (!params.series) {
+    return undefined;
+  }
+
+  return `<meta name="calibre:series" content="${escapeHtml(params.series)}"/>`;
+}
+
 
 function formatErrorDetails(error: unknown): string {
   if (!error || typeof error !== 'object') {
-    return `error=${JSON.stringify(String(error))}`;
+    return `error=${JSON.stringify(scrubDataUrls(String(error)))}`;
   }
 
   const errorWithFields = error as {
@@ -247,14 +515,22 @@ function formatErrorDetails(error: unknown): string {
   };
 
   const details = [
-    `errorMessage=${JSON.stringify(errorWithFields.message ?? 'Unknown error')}`,
+    `errorMessage=${JSON.stringify(scrubDataUrls(errorWithFields.message ?? 'Unknown error'))}`,
     `code=${JSON.stringify(errorWithFields.code ?? null)}`,
     `errno=${JSON.stringify(errorWithFields.errno ?? null)}`,
     `syscall=${JSON.stringify(errorWithFields.syscall ?? null)}`,
-    `path=${JSON.stringify(errorWithFields.path ?? null)}`
+    `path=${JSON.stringify(scrubDataUrls(errorWithFields.path ?? null))}`
   ];
 
   return details.join(' ');
+}
+
+function scrubDataUrls(value: unknown): unknown {
+  if (typeof value !== 'string') {
+    return value;
+  }
+
+  return value.replace(/data:image\/[a-zA-Z0-9.+-]+(?:;[^,]*)?,[^"'\s)]+/gi, '[data:image omitted]');
 }
 
 function toLabel(key: string): string {
@@ -264,8 +540,29 @@ function toLabel(key: string): string {
 }
 
 async function prepareEpubContent(
-  chapters: Array<{ title: string; bodyHtml: string }>
+  chapters: Array<{ title: string; bodyHtml: string }>,
+  assetDir: string
 ): Promise<Array<{ title: string; data: string }>> {
+  const cryptoModuleName = 'node:crypto';
+
+  const pathModuleName = 'node:path';
+  const fsModuleName = 'node:fs/promises';
+
+  const path = await import(/* @vite-ignore */ pathModuleName);
+  const fs = (await import(/* @vite-ignore */ fsModuleName)) as {
+    writeFile: (path: string, data: Uint8Array) => Promise<void>;
+  };
+  const { createHash } = await import(/* @vite-ignore */ cryptoModuleName);
+
+  return Promise.all(
+    chapters.map(async (chapter, chapterIndex) => ({
+      title: chapter.title,
+      data: await replaceDataImageUrls(chapter.bodyHtml, assetDir, chapterIndex, createHash, fs, path)
+    }))
+  );
+}
+
+async function createEpubAssetDirectory(): Promise<string> {
   const osModuleName = 'node:os';
   const pathModuleName = 'node:path';
   const fsModuleName = 'node:fs/promises';
@@ -275,19 +572,35 @@ async function prepareEpubContent(
   const path = await import(/* @vite-ignore */ pathModuleName);
   const fs = (await import(/* @vite-ignore */ fsModuleName)) as {
     mkdir: (path: string, options: { recursive: boolean }) => Promise<void>;
-    writeFile: (path: string, data: Uint8Array) => Promise<void>;
   };
-  const { createHash, randomUUID } = await import(/* @vite-ignore */ cryptoModuleName);
+  const { randomUUID } = await import(/* @vite-ignore */ cryptoModuleName);
 
   const assetDir = path.join(os.tmpdir(), 'content-creator-epub-assets', randomUUID());
   await fs.mkdir(assetDir, { recursive: true });
+  return assetDir;
+}
 
-  return Promise.all(
-    chapters.map(async (chapter, chapterIndex) => ({
-      title: chapter.title,
-      data: await replaceDataImageUrls(chapter.bodyHtml, assetDir, chapterIndex, createHash, fs, path)
-    }))
-  );
+async function writeDataImageToAsset(dataUrl: string, assetDir: string, prefix: string): Promise<string> {
+  const cryptoModuleName = 'node:crypto';
+  const pathModuleName = 'node:path';
+  const fsModuleName = 'node:fs/promises';
+
+  const { createHash } = await import(/* @vite-ignore */ cryptoModuleName);
+  const path = await import(/* @vite-ignore */ pathModuleName);
+  const fs = (await import(/* @vite-ignore */ fsModuleName)) as {
+    writeFile: (path: string, data: Uint8Array) => Promise<void>;
+  };
+
+  const parsed = parseDataImageUrl(dataUrl);
+  if (!parsed) {
+    return dataUrl;
+  }
+
+  const digest = createHash('sha1').update(dataUrl).digest('hex');
+  const fileName = `${prefix}-${digest.slice(0, 10)}.${parsed.extension}`;
+  const imagePath = path.join(assetDir, fileName);
+  await fs.writeFile(imagePath, parsed.data);
+  return imagePath;
 }
 
 async function replaceDataImageUrls(
@@ -324,21 +637,64 @@ async function replaceDataImageUrls(
   return updatedHtml;
 }
 
-function parseDataImageUrl(dataUrl: string): { data: Uint8Array; extension: string } | null {
-  const match = dataUrl.match(/^data:image\/([\w.+-]+)(?:;[^;,=]+=[^;,]+)*(?:;base64),(.+)$/i);
+function parseDataImageUrl(dataUrl: string): { extension: string; data: Uint8Array } | null {
+  const match = /^data:image\/([a-zA-Z0-9.+-]+)(;[^,]*)?,([\s\S]+)$/i.exec(dataUrl);
   if (!match) {
     return null;
   }
 
-  const extension = match[1].toLowerCase() === 'jpeg' ? 'jpg' : match[1].toLowerCase();
-  const nodeBuffer = (globalThis as { Buffer?: { from: (value: string, encoding: 'base64') => Uint8Array } }).Buffer;
-  if (!nodeBuffer) {
-    return null;
+  const extension = normalizeImageExtension(match[1]);
+  const metadata = match[2] ?? '';
+  const payload = match[3];
+
+  const isBase64 = metadata
+    .split(';')
+    .map((value) => value.trim().toLowerCase())
+    .includes('base64');
+
+  if (isBase64) {
+    return { extension, data: decodeBase64ToBytes(payload.replace(/\s+/g, '')) };
   }
 
-  const bytes = nodeBuffer.from(match[2], 'base64');
-  return { data: new Uint8Array(bytes), extension };
+  return { extension, data: decodeUriEncodedBytes(payload) };
 }
+
+function decodeBase64ToBytes(value: string): Uint8Array {
+  const bufferConstructor = (globalThis as { Buffer?: { from: (input: string, encoding: string) => Uint8Array } }).Buffer;
+  if (bufferConstructor) {
+    return bufferConstructor.from(value, 'base64');
+  }
+
+  const decoder = (globalThis as { atob?: (input: string) => string }).atob;
+  if (!decoder) {
+    throw new Error('Base64 decoder is unavailable in the current runtime.');
+  }
+
+  const binary = decoder(value);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+
+  return bytes;
+}
+
+function decodeUriEncodedBytes(value: string): Uint8Array {
+  const decoded = decodeURIComponent(value);
+  const encoder = new TextEncoder();
+  return encoder.encode(decoded);
+}
+
+function normalizeImageExtension(mediaTypePart: string): string {
+  const value = mediaTypePart.toLowerCase();
+
+  if (value === 'jpeg') {
+    return 'jpg';
+  }
+
+  return value;
+}
+
 function escapeHtml(value: string): string {
   return value
     .replaceAll('&', '&amp;')

@@ -68,12 +68,22 @@ declare global {
         url: string;
         content?: string;
         preview: string;
+        metadata?: Record<string, string>;
         stylesheets?: string[];
         scripts?: string[];
       }>;
       profileName: string;
       profileDomain: string;
       crawlPagesTempFileId?: string;
+      exportDestination?: string;
+      exportFileNameTemplate?: string;
+      exportLayout?: {
+        disableTableOfContents: boolean;
+        coverImageSource: 'metadata.cover' | 'first-image-from-url';
+        coverPage: { header: string[]; body: string[]; footer: string[] };
+        indexPage: { header: string[]; body: string[]; footer: string[] };
+        contentPage: { header: string[]; body: string[]; footer: string[] };
+      };
     }) => Promise<{
       artifacts: Array<{
         format: 'html' | 'pdf' | 'epub' | 'epub-manifest';
