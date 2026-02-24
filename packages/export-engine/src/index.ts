@@ -412,7 +412,7 @@ async function renderEpubFromCanonicalDocument(params: {
         appendChapterTitles: false,
         customOpfTemplate: buildCustomOpfTemplate({ series: bookSeries }),
         customHtmlTocTemplate: layout.disableTableOfContents
-          ? '<!DOCTYPE html><html xmlns="http://www.w3.org/1999/xhtml"><head><title>Table of Contents</title></head><body><nav epub:type="toc" id="toc"><h2>Table of Contents</h2><ol></ol></nav></body></html>'
+          ? '<!DOCTYPE html><html xmlns="http://www.w3.org/1999/xhtml"><head><title>Table of Contents</title></head><body><nav epub:type="toc" id="toc"><ol></ol></nav></body></html>'
           : undefined,
         content
       },
@@ -519,56 +519,219 @@ async function postProcessEpub(
   options: { disableTableOfContents: boolean; series?: string }
 ): Promise<void> {
   const series = options.series?.trim();
-  if (!series) {
-    return;
-  }
 
   const script = `
 import tempfile
 import zipfile
+import struct
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
 path = Path(${JSON.stringify(outputEpubPath)})
 series = ${JSON.stringify(series ?? '')}.strip()
 
+CONTAINER_NS = 'urn:oasis:names:tc:opendocument:xmlns:container'
+OPF_NS = 'http://www.idpf.org/2007/opf'
+DC_NS = 'http://purl.org/dc/elements/1.1/'
+XHTML_NS = 'http://www.w3.org/1999/xhtml'
+
+def local_name(tag: str) -> str:
+    return tag.rsplit('}', 1)[-1]
+
+def ensure_rendition_metadata(metadata):
+    wanted = {
+        'rendition:layout': 'pre-paginated',
+        'rendition:spread': 'none',
+        'rendition:orientation': 'portrait',
+    }
+
+    for prop, value in wanted.items():
+        existing = None
+        for child in metadata:
+            if local_name(child.tag) == 'meta' and child.attrib.get('property') == prop:
+                existing = child
+                break
+
+        if existing is None:
+            existing = ET.SubElement(metadata, f'{{{OPF_NS}}}meta')
+            existing.set('property', prop)
+
+        existing.text = value
+
+def png_size(data: bytes):
+    if len(data) < 24 or data[:8] != b'\\x89PNG\\r\\n\\x1a\\n':
+        return None
+    return struct.unpack('>II', data[16:24])
+
+def jpeg_size(data: bytes):
+    if len(data) < 4 or data[0] != 0xFF or data[1] != 0xD8:
+        return None
+
+    offset = 2
+    while offset + 9 < len(data):
+        if data[offset] != 0xFF:
+            offset += 1
+            continue
+
+        marker = data[offset + 1]
+        offset += 2
+
+        if marker in (0xD8, 0xD9):
+            continue
+
+        if offset + 2 > len(data):
+            break
+
+        segment_len = struct.unpack('>H', data[offset:offset + 2])[0]
+        if segment_len < 2 or offset + segment_len > len(data):
+            break
+
+        if marker in (0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF):
+            if offset + 7 <= len(data):
+                height = struct.unpack('>H', data[offset + 3:offset + 5])[0]
+                width = struct.unpack('>H', data[offset + 5:offset + 7])[0]
+                return (width, height)
+
+        offset += segment_len
+
+    return None
+
+def get_image_size(data: bytes):
+    return png_size(data) or jpeg_size(data)
+
+def ensure_viewport(xhtml_bytes: bytes, width: int, height: int):
+    root = ET.fromstring(xhtml_bytes)
+    head = None
+    for node in root.iter():
+        if local_name(node.tag) == 'head':
+            head = node
+            break
+
+    if head is None:
+        head = ET.SubElement(root, f'{{{XHTML_NS}}}head')
+
+    viewport_value = f'width={width},height={height}'
+    viewport = None
+    for node in head:
+        if local_name(node.tag) == 'meta' and node.attrib.get('name') == 'viewport':
+            viewport = node
+            break
+
+    if viewport is None:
+        viewport = ET.SubElement(head, f'{{{XHTML_NS}}}meta')
+        viewport.set('name', 'viewport')
+
+    viewport.set('content', viewport_value)
+    return ET.tostring(root, encoding='utf-8', xml_declaration=True)
+
 with zipfile.ZipFile(path, 'r') as source_zip:
     container_xml = source_zip.read('META-INF/container.xml')
 
 root = ET.fromstring(container_xml)
-ns = {'c': 'urn:oasis:names:tc:opendocument:xmlns:container'}
+ns = {'c': CONTAINER_NS}
 opf_path = root.find('.//c:rootfile', ns).attrib.get('full-path', 'OEBPS/content.opf')
 
 with tempfile.NamedTemporaryFile(delete=False, suffix='.epub') as tmp_file:
     tmp_path = Path(tmp_file.name)
 
-with zipfile.ZipFile(path, 'r') as source_zip, zipfile.ZipFile(tmp_path, 'w') as target_zip:
-    for item in source_zip.infolist():
-        data = source_zip.read(item.filename)
+with zipfile.ZipFile(path, 'r') as source_zip:
+    manifest_by_id = {}
+    xhtml_to_image = {}
+    opf_root = None
 
-        if item.filename == opf_path and series:
-            opf_root = ET.fromstring(data)
-            metadata = None
-            for node in opf_root.iter():
-                if node.tag.endswith('metadata'):
-                    metadata = node
+    opf_bytes = source_zip.read(opf_path)
+    opf_root = ET.fromstring(opf_bytes)
+    metadata = None
+    manifest = None
+    spine = None
+
+    for node in opf_root:
+        node_name = local_name(node.tag)
+        if node_name == 'metadata':
+            metadata = node
+        elif node_name == 'manifest':
+            manifest = node
+        elif node_name == 'spine':
+            spine = node
+
+    if metadata is not None:
+        if series:
+            existing = None
+            for child in metadata:
+                if local_name(child.tag) == 'meta' and child.attrib.get('name') == 'calibre:series':
+                    existing = child
                     break
 
-            if metadata is not None:
-                existing = None
-                for child in metadata:
-                    if child.tag.endswith('meta') and child.attrib.get('name') == 'calibre:series':
-                        existing = child
-                        break
+            if existing is None:
+                existing = ET.SubElement(metadata, f'{{{OPF_NS}}}meta')
+                existing.set('name', 'calibre:series')
 
-                if existing is None:
-                    existing = ET.SubElement(metadata, 'meta')
-                    existing.set('name', 'calibre:series')
+            existing.set('content', series)
 
-                existing.set('content', series)
-                data = ET.tostring(opf_root, encoding='utf-8', xml_declaration=True)
+        ensure_rendition_metadata(metadata)
 
-        target_zip.writestr(item, data)
+    if manifest is not None:
+        for item in manifest:
+            if local_name(item.tag) != 'item':
+                continue
+            item_id = item.attrib.get('id')
+            if item_id:
+                manifest_by_id[item_id] = item.attrib.get('href', '')
+
+    if spine is not None and 'toc' in spine.attrib:
+        del spine.attrib['toc']
+
+    for node in opf_root.iter():
+        if local_name(node.tag) == 'itemref':
+            idref = node.attrib.get('idref')
+            href = manifest_by_id.get(idref, '')
+            if href.lower().endswith(('.xhtml', '.html', '.htm')):
+                node.set('properties', 'rendition:layout-pre-paginated')
+
+    if manifest is not None and spine is not None:
+        for item in manifest:
+            if local_name(item.tag) != 'item':
+                continue
+            href = item.attrib.get('href', '')
+            media_type = item.attrib.get('media-type', '')
+            if media_type.startswith('image/'):
+                base = href.rsplit('.', 1)[0]
+                xhtml_to_image[f'{base}.xhtml'] = href
+                xhtml_to_image[f'{base}.html'] = href
+                xhtml_to_image[f'{base}.htm'] = href
+                xhtml_to_image[f'{base.split('/')[-1]}.xhtml'] = href
+                xhtml_to_image[f'{base.split('/')[-1]}.html'] = href
+                xhtml_to_image[f'{base.split('/')[-1]}.htm'] = href
+
+    opf_bytes = ET.tostring(opf_root, encoding='utf-8', xml_declaration=True)
+
+    with zipfile.ZipFile(tmp_path, 'w') as target_zip:
+        for item in source_zip.infolist():
+            data = source_zip.read(item.filename)
+
+            if item.filename == opf_path:
+                data = opf_bytes
+
+            if item.filename.lower().endswith('.ncx'):
+                continue
+
+            if item.filename.lower().endswith(('.xhtml', '.html', '.htm')):
+                xhtml_name = item.filename.split('/')[-1]
+                image_href = xhtml_to_image.get(xhtml_name)
+                if image_href:
+                    image_path = '/'.join(item.filename.split('/')[:-1] + [image_href])
+                    try:
+                        image_data = source_zip.read(image_path)
+                        size = get_image_size(image_data)
+                        if size:
+                            data = ensure_viewport(data, size[0], size[1])
+                    except KeyError:
+                        pass
+
+                if b'epub:type="toc"' in data:
+                    data = b'<?xml version="1.0" encoding="utf-8"?>\\n<!DOCTYPE html><html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops"><head><title>Table of Contents</title></head><body><nav epub:type="toc" id="toc"><ol></ol></nav></body></html>'
+
+            target_zip.writestr(item, data)
 
 tmp_path.replace(path)
 `;
