@@ -72,6 +72,7 @@ export function App() {
         <StartJobPanel
           profiles={profiles}
           jobProfiles={jobProfiles}
+          jobs={jobs}
           onJobCreated={setJobs}
           onRequestCreateProfile={handleRequestCreateProfile}
         />
