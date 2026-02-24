@@ -70,6 +70,7 @@ export function ResultsPanel({ jobs, onJobsUpdated }: ResultsPanelProps) {
           <JobDetailsCard
             job={selectedJob}
             isExporting={exportingJobId === selectedJob.id}
+            exportPercent={exportingJobId === selectedJob.id ? exportPercent : 0}
             onExportHtml={(job) => void runExport(job, exportJobAsHtml)}
             onExportPdf={(job) => void runExport(job, exportJobAsPdf)}
             onExportEpub={(job) => void runExport(job, exportJobAsEpub)}
