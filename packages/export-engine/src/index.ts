@@ -554,14 +554,25 @@ async function prepareEpubContent(
   };
   const { createHash } = await import(/* @vite-ignore */ cryptoModuleName);
 
-  return Promise.all(
-    chapters.map(async (chapter, chapterIndex) => ({
-      title: chapter.title,
-      data: await replaceDataImageUrls(chapter.bodyHtml, assetDir, chapterIndex, createHash, fs, path),
-      // Keep a single TOC entry that points to the first rendered page.
-      excludeFromToc: chapterIndex !== 0
-    }))
-  );
+  const mergedHtml = chapters
+    .map(
+      (chapter) => `
+        <section style="page-break-after: always; break-after: page;">
+          ${chapter.bodyHtml}
+        </section>
+      `
+    )
+    .join('\n');
+
+  const data = await replaceDataImageUrls(mergedHtml, assetDir, 0, createHash, fs, path);
+
+  return [
+    {
+      title: chapters[0]?.title ?? 'Content',
+      data,
+      excludeFromToc: false
+    }
+  ];
 }
 
 async function createEpubAssetDirectory(): Promise<string> {
