@@ -591,7 +591,7 @@ async function writeDataImageToAsset(dataUrl: string, assetDir: string, prefix: 
     writeFile: (path: string, data: Uint8Array) => Promise<void>;
   };
 
-  const parsed = parseDataImageUrl(dataUrl);
+  const parsed = await parseDataImageUrlForEpub(dataUrl);
   if (!parsed) {
     return dataUrl;
   }
@@ -619,7 +619,7 @@ async function replaceDataImageUrls(
 
   while ((match = dataImageRegex.exec(html)) !== null) {
     const dataUrl = match[2];
-    const parsed = parseDataImageUrl(dataUrl);
+    const parsed = await parseDataImageUrlForEpub(dataUrl);
 
     if (!parsed) {
       continue;
@@ -657,6 +657,73 @@ function parseDataImageUrl(dataUrl: string): { extension: string; data: Uint8Arr
   }
 
   return { extension, data: decodeUriEncodedBytes(payload) };
+}
+
+async function parseDataImageUrlForEpub(dataUrl: string): Promise<{ extension: string; data: Uint8Array } | null> {
+  const parsed = parseDataImageUrl(dataUrl);
+  if (!parsed) {
+    return null;
+  }
+
+  if (parsed.extension !== 'webp') {
+    return parsed;
+  }
+
+  return convertWebpDataUrlToJpeg(dataUrl);
+}
+
+async function convertWebpDataUrlToJpeg(dataUrl: string): Promise<{ extension: string; data: Uint8Array }> {
+  const jpegDataUrl = await convertImageDataUrlWithPlaywright(dataUrl, 'image/jpeg');
+  const parsed = parseDataImageUrl(jpegDataUrl);
+  if (!parsed) {
+    throw new Error('Unable to parse converted JPEG data URL for EPUB export.');
+  }
+
+  return {
+    extension: 'jpg',
+    data: parsed.data
+  };
+}
+
+async function convertImageDataUrlWithPlaywright(dataUrl: string, targetMimeType: string): Promise<string> {
+  const playwrightModuleName = 'playwright';
+  const playwrightModule = (await import(/* @vite-ignore */ playwrightModuleName)) as {
+    chromium: {
+      launch: (opts: { headless: boolean }) => Promise<{
+        newPage: () => Promise<{
+          evaluate: <T>(fn: (params: { sourceDataUrl: string; mimeType: string }) => Promise<T> | T, params: { sourceDataUrl: string; mimeType: string }) => Promise<T>;
+        }>;
+        close: () => Promise<void>;
+      }>;
+    };
+  };
+
+  const browser = await playwrightModule.chromium.launch({ headless: true });
+  try {
+    const page = await browser.newPage();
+    return await page.evaluate(
+      async ({ sourceDataUrl, mimeType }) => {
+        const img = new Image();
+        img.decoding = 'sync';
+        img.src = sourceDataUrl;
+        await img.decode();
+
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const context = canvas.getContext('2d');
+        if (!context) {
+          throw new Error('2D canvas context is unavailable for image conversion.');
+        }
+
+        context.drawImage(img, 0, 0);
+        return canvas.toDataURL(mimeType, 0.92);
+      },
+      { sourceDataUrl: dataUrl, mimeType: targetMimeType }
+    );
+  } finally {
+    await browser.close();
+  }
 }
 
 function decodeBase64ToBytes(value: string): Uint8Array {
