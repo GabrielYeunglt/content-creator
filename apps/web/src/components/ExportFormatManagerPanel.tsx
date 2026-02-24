@@ -107,6 +107,18 @@ export function ExportFormatManagerPanel({ jobs }: { jobs: JobRecord[] }) {
       <h2>Export Format Manager</h2>
       <p>Configure cover/index/content layouts. Add or remove elements for header, body, and footer.</p>
 
+      <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+        <input
+          type="checkbox"
+          checked={config.disableMetadataPage}
+          onChange={(event) => {
+            setConfig((current) => ({ ...current, disableMetadataPage: event.target.checked }));
+            setSaveState('idle');
+          }}
+        />
+        Disable metadata page
+      </label>
+
       <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
         <input
           type="checkbox"

@@ -24,6 +24,7 @@ export type ExportPageTemplate = {
 
 export type ExportLayout = {
   disableTableOfContents: boolean;
+  disableMetadataPage: boolean;
   coverImageSource: 'metadata.cover' | 'first-image-from-url';
   coverPage: ExportPageTemplate;
   indexPage: ExportPageTemplate;
@@ -41,6 +42,7 @@ export type ExportPipelineOptions = {
 
 const defaultExportLayout: ExportLayout = {
   disableTableOfContents: false,
+  disableMetadataPage: false,
   coverImageSource: 'metadata.cover',
   coverPage: {
     header: ['document.title'],
@@ -121,13 +123,15 @@ export function renderCanonicalHtml(document: CanonicalDocument, exportLayout?: 
 function buildStructuredPages(document: CanonicalDocument, layout: ExportLayout): StructuredPage[] {
   const pages: StructuredPage[] = [];
 
-  pages.push({
-    kind: 'cover',
-    title: document.title,
-    headerHtml: renderTemplateElements(layout.coverPage.header, document),
-    bodyHtml: renderTemplateElements(layout.coverPage.body, document),
-    footerHtml: renderTemplateElements(layout.coverPage.footer, document)
-  });
+  if (!layout.disableMetadataPage) {
+    pages.push({
+      kind: 'cover',
+      title: document.title,
+      headerHtml: renderTemplateElements(layout.coverPage.header, document),
+      bodyHtml: renderTemplateElements(layout.coverPage.body, document),
+      footerHtml: renderTemplateElements(layout.coverPage.footer, document)
+    });
+  }
 
   if (!layout.disableTableOfContents) {
     pages.push({
@@ -213,8 +217,11 @@ function sanitizeExportLayout(candidate?: ExportLayout): ExportLayout {
     return defaultExportLayout;
   }
 
+  const toBoolean = (value: unknown): boolean => value === true || value === 'true' || value === 1;
+
   return {
-    disableTableOfContents: Boolean(candidate.disableTableOfContents),
+    disableTableOfContents: toBoolean(candidate.disableTableOfContents),
+    disableMetadataPage: toBoolean(candidate.disableMetadataPage),
     coverImageSource: candidate.coverImageSource === 'first-image-from-url' ? 'first-image-from-url' : 'metadata.cover',
     coverPage: sanitizeTemplate(candidate.coverPage, defaultExportLayout.coverPage),
     indexPage: sanitizeTemplate(candidate.indexPage, defaultExportLayout.indexPage),

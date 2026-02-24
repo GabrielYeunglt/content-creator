@@ -87,6 +87,28 @@ function normalizeDomain(domain: string): string {
   return domain.trim().replace(/^www\./, '').toLowerCase();
 }
 
+function renderTemplateValue(template: string, context: {
+  jobId: string;
+  profileName: string;
+  profileDomain: string;
+  documentTitle: string;
+  metadata: Record<string, string>;
+  date: string;
+}): string {
+  return template.replace(/\{\{\s*([^}]+)\s*\}\}/g, (_, tokenRaw: string) => {
+    const token = tokenRaw.trim();
+    if (token === 'job.id') return context.jobId;
+    if (token === 'date') return context.date;
+    if (token === 'profile.name') return context.profileName;
+    if (token === 'profile.domain') return context.profileDomain;
+    if (token === 'document.title') return context.documentTitle;
+    if (token.startsWith('metadata.')) {
+      return context.metadata[token.slice('metadata.'.length)] ?? '';
+    }
+    return '';
+  });
+}
+
 function getDesktopCrawlerBridge():
   | ((request: VirtualBrowserCrawlRequest) => Promise<VirtualBrowserCrawlResponse>)
   | null {
@@ -235,6 +257,20 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
       pages: extractedPages
     });
 
+    const titleOverrideTemplate = jobProfile?.titleOverrideTemplate?.trim();
+    const overriddenTitle = titleOverrideTemplate
+      ? renderTemplateValue(titleOverrideTemplate, {
+        jobId,
+        profileName: profile.name,
+        profileDomain: profile.domain,
+        documentTitle: consolidated.title,
+        metadata: consolidated.metadata,
+        date: new Date().toISOString()
+      }).trim()
+      : '';
+
+    const resolvedTitle = overriddenTitle || consolidated.title;
+
     const completed = updateJob(jobId, {
       status: 'completed',
       completedAt: new Date().toISOString(),
@@ -245,11 +281,11 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
       extractedPreview: extractedPages.map((item, index) => `Page ${index + 1}: ${item.preview}`).join('\n\n'),
       consolidatedDocument: {
         id: consolidated.id,
-        title: consolidated.title,
+        title: resolvedTitle,
         sourceDomain: consolidated.sourceDomain,
         generatedAt: consolidated.generatedAt,
-        chapterCount: consolidated.chapters.length
-        ,metadata: consolidated.metadata
+        chapterCount: consolidated.chapters.length,
+        metadata: overriddenTitle ? { ...consolidated.metadata, title: overriddenTitle } : consolidated.metadata
       },
       stopReason: lastResult?.stopReason ?? 'completed',
       note: `Virtual-browser crawl completed for ${urlsToRun.length} URL(s). Final stop reason: ${lastResult?.stopReason ?? 'completed'}.`

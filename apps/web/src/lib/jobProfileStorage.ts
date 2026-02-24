@@ -20,6 +20,7 @@ function sanitizeJobProfile(candidate: Partial<JobProfile>): JobProfile | null {
     metadataOverrides: candidate.metadataOverrides ?? {},
     exportDestination: candidate.exportDestination?.trim() || '',
     exportFileNameTemplate: candidate.exportFileNameTemplate?.trim() || '{{job.id}}-{{date}}',
+    titleOverrideTemplate: candidate.titleOverrideTemplate?.trim() || '',
     createdAt: candidate.createdAt ?? new Date().toISOString(),
     updatedAt: candidate.updatedAt ?? new Date().toISOString()
   };
@@ -55,6 +56,7 @@ function buildJobProfile(draft: JobProfileDraft, id: string, createdAt: string):
     metadataOverrides: draft.metadataOverrides,
     exportDestination: draft.exportDestination,
     exportFileNameTemplate: draft.exportFileNameTemplate.trim(),
+    titleOverrideTemplate: draft.titleOverrideTemplate.trim(),
     createdAt,
     updatedAt: new Date().toISOString()
   };
@@ -107,6 +109,7 @@ export function jobProfileToDraft(profile: JobProfile): JobProfileDraft {
     maxPagesOverride: profile.maxPagesOverride ?? '',
     metadataOverrides: profile.metadataOverrides ?? {},
     exportDestination: profile.exportDestination ?? '',
-    exportFileNameTemplate: profile.exportFileNameTemplate ?? '{{job.id}}-{{date}}'
+    exportFileNameTemplate: profile.exportFileNameTemplate ?? '{{job.id}}-{{date}}',
+    titleOverrideTemplate: profile.titleOverrideTemplate ?? ''
   };
 }

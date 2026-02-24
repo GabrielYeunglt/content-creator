@@ -79,6 +79,7 @@ declare global {
       exportFileNameTemplate?: string;
       exportLayout?: {
         disableTableOfContents: boolean;
+        disableMetadataPage: boolean;
         coverImageSource: 'metadata.cover' | 'first-image-from-url';
         coverPage: { header: string[]; body: string[]; footer: string[] };
         indexPage: { header: string[]; body: string[]; footer: string[] };
