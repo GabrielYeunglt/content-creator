@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { runCrawlJob } from '../lib/jobRunner';
 import { appendJob } from '../lib/jobStorage';
 import { readRuntimeBridgeStatus } from '../lib/runtimeBridgeStatus';
+import { exportJobAllViaDesktop, exportJobAsEpub, exportJobAsHtml, exportJobAsPdf } from '../lib/exportActions';
 import type { JobMode, JobProfile } from '../types/jobProfile';
 import type { JobRecord } from '../types/job';
 import type { WebsiteProfile } from '../types/profile';
@@ -53,6 +54,7 @@ export function StartJobPanel({ profiles, jobProfiles, jobs, onJobCreated, onReq
   const [selectedJobProfileId, setSelectedJobProfileId] = useState('');
   const [message, setMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [exportingJobId, setExportingJobId] = useState<string | null>(null);
   const [rememberedOverrides, setRememberedOverrides] = useState<Record<string, string>>(() => readRememberedJobProfileOverrides());
 
   const runtimeBridgeStatus = useMemo(() => readRuntimeBridgeStatus(), []);
@@ -110,10 +112,26 @@ export function StartJobPanel({ profiles, jobProfiles, jobs, onJobCreated, onReq
     [matchingJobProfiles, selectedJobProfileId]
   );
 
-  const currentJob = useMemo(
-    () => [...jobs].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0] ?? null,
-    [jobs]
-  );
+  const currentJob = useMemo(() => {
+    const byRecency = (a: JobRecord, b: JobRecord) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    const running = jobs.filter((job) => job.status === 'running').sort(byRecency)[0];
+    if (running) return running;
+
+    const queued = jobs.filter((job) => job.status === 'queued').sort(byRecency)[0];
+    if (queued) return queued;
+
+    return [...jobs].sort(byRecency)[0] ?? null;
+  }, [jobs]);
+
+  async function runExport(job: JobRecord, action: (value: JobRecord) => Promise<JobRecord[] | null>) {
+    setExportingJobId(job.id);
+    try {
+      const updated = await action(job);
+      if (updated) onJobCreated(updated);
+    } finally {
+      setExportingJobId(null);
+    }
+  }
 
   useEffect(() => {
     const rememberedForProfile = rememberedOverrides[selectedProfileId] ?? '';
@@ -361,7 +379,14 @@ export function StartJobPanel({ profiles, jobProfiles, jobs, onJobCreated, onReq
       {currentJob && (
         <div className="space-y-2">
           <h3 className="text-sm font-semibold text-slate-800">Current job snapshot</h3>
-          <JobDetailsCard job={currentJob} />
+          <JobDetailsCard
+            job={currentJob}
+            isExporting={exportingJobId === currentJob.id}
+            onExportHtml={(job) => void runExport(job, exportJobAsHtml)}
+            onExportPdf={(job) => void runExport(job, exportJobAsPdf)}
+            onExportEpub={(job) => void runExport(job, exportJobAsEpub)}
+            onExportAll={(job) => void runExport(job, exportJobAllViaDesktop)}
+          />
         </div>
       )}
     </section>
