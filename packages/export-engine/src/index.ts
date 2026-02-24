@@ -366,8 +366,9 @@ async function renderEpubFromCanonicalDocument(params: {
         language?: string;
         appendChapterTitles?: boolean;
         customOpfTemplate?: string;
+        customHtmlTocTemplate?: string;
         content: Array<{ title: string; data: string }>;
-      },
+      } & Record<string, unknown>,
       output: string
     ) => { promise?: Promise<unknown> };
 
@@ -408,6 +409,9 @@ async function renderEpubFromCanonicalDocument(params: {
         language: bookLanguage,
         appendChapterTitles: false,
         customOpfTemplate: buildCustomOpfTemplate({ series: bookSeries }),
+        customHtmlTocTemplate: layout.disableTableOfContents
+          ? '<!DOCTYPE html><html xmlns="http://www.w3.org/1999/xhtml"><head><title>Table of Contents</title></head><body><nav epub:type="toc" id="toc"><h2>Table of Contents</h2><ol></ol></nav></body></html>'
+          : undefined,
         content
       },
       outputEpubPath
@@ -415,6 +419,10 @@ async function renderEpubFromCanonicalDocument(params: {
 
     if (instance.promise) {
       await instance.promise;
+      await postProcessEpub(outputEpubPath, {
+        disableTableOfContents: layout.disableTableOfContents,
+        series: bookSeries
+      });
       return;
     }
 
@@ -499,14 +507,105 @@ function getMetadataValue(document: CanonicalDocument, candidates: string[]): st
   return undefined;
 }
 
-function buildCustomOpfTemplate(params: { series?: string }): string | undefined {
-  if (!params.series) {
-    return undefined;
-  }
-
-  return `<meta name="calibre:series" content="${escapeHtml(params.series)}"/>`;
+function buildCustomOpfTemplate(_params: { series?: string }): string | undefined {
+  return undefined;
 }
 
+
+async function postProcessEpub(
+  outputEpubPath: string,
+  options: { disableTableOfContents: boolean; series?: string }
+): Promise<void> {
+  const series = options.series?.trim();
+  if (!options.disableTableOfContents && !series) {
+    return;
+  }
+
+  const script = `
+import re
+import tempfile
+import zipfile
+from pathlib import Path
+from xml.etree import ElementTree as ET
+
+path = Path(${JSON.stringify(outputEpubPath)})
+series = ${JSON.stringify(series ?? '')}.strip()
+disable_toc = ${JSON.stringify(options.disableTableOfContents)}
+
+with zipfile.ZipFile(path, 'r') as source_zip:
+    container_xml = source_zip.read('META-INF/container.xml')
+
+root = ET.fromstring(container_xml)
+ns = {'c': 'urn:oasis:names:tc:opendocument:xmlns:container'}
+opf_path = root.find('.//c:rootfile', ns).attrib.get('full-path', 'OEBPS/content.opf')
+
+with tempfile.NamedTemporaryFile(delete=False, suffix='.epub') as tmp_file:
+    tmp_path = Path(tmp_file.name)
+
+with zipfile.ZipFile(path, 'r') as source_zip, zipfile.ZipFile(tmp_path, 'w') as target_zip:
+    for item in source_zip.infolist():
+        data = source_zip.read(item.filename)
+
+        if item.filename == opf_path and series:
+            text = data.decode('utf-8')
+            if 'name="calibre:series"' in text:
+                text = re.sub(r'<meta\s+name="calibre:series"\s+content="[^"]*"\s*/?>', f'<meta name="calibre:series" content="{series}"/>', text)
+            else:
+                text = text.replace('</metadata>', f'\n    <meta name="calibre:series" content="{series}"/>\n  </metadata>')
+            data = text.encode('utf-8')
+
+        if disable_toc and item.filename.endswith('toc.xhtml'):
+            text = data.decode('utf-8')
+            text = re.sub(r'<ol[^>]*>[\s\S]*?</ol>', '<ol></ol>', text)
+            data = text.encode('utf-8')
+
+        if disable_toc and item.filename.endswith('.ncx'):
+            text = data.decode('utf-8')
+            text = re.sub(r'<navMap>[\s\S]*?</navMap>', '<navMap/>', text)
+            data = text.encode('utf-8')
+
+        target_zip.writestr(item, data)
+
+tmp_path.replace(path)
+`;
+
+  try {
+    const childProcessModuleName = 'node:child_process';
+    const { execFile } = (await import(/* @vite-ignore */ childProcessModuleName)) as {
+      execFile: (
+        file: string,
+        args: string[],
+        options: { env: Record<string, string | undefined> },
+        callback: (error: unknown) => void
+      ) => void;
+    };
+
+    const processRef = globalThis as { process?: { env?: Record<string, string | undefined> } };
+
+    await new Promise<void>((resolve, reject) => {
+      execFile(
+        'python3',
+        ['-c', script],
+        {
+          env: {
+            ...(processRef.process?.env ?? {}),
+            PYTHONIOENCODING: 'utf-8'
+          }
+        },
+        (error) => {
+          if (error) {
+            reject(error);
+            return;
+          }
+
+          resolve();
+        }
+      );
+    });
+  } catch (error) {
+    throw new Error(`EPUB post-processing failed: ${formatErrorDetails(error)}`);
+  }
+}
 
 function formatErrorDetails(error: unknown): string {
   if (!error || typeof error !== 'object') {
@@ -618,16 +717,20 @@ async function replaceDataImageUrls(
   fs: { writeFile: (path: string, data: Uint8Array) => Promise<void> },
   path: { join: (...paths: string[]) => string }
 ): Promise<string> {
-  const dataImageRegex = /<img\b([^>]*?)\bsrc=["'](data:image\/[^"']+)["']([^>]*?)>/gi;
+  const dataImageRegex = /data:image\/[a-zA-Z0-9.+-]+(?:;[^,]*)?,[^"'\s)]+/gi;
 
   let updatedHtml = html;
   let match: RegExpExecArray | null;
   let imageIndex = 0;
+  const replacements = new Map<string, string>();
 
   while ((match = dataImageRegex.exec(html)) !== null) {
-    const dataUrl = match[2];
-    const parsed = parseDataImageUrl(dataUrl);
+    const dataUrl = match[0];
+    if (replacements.has(dataUrl)) {
+      continue;
+    }
 
+    const parsed = parseDataImageUrl(dataUrl);
     if (!parsed) {
       continue;
     }
@@ -638,7 +741,11 @@ async function replaceDataImageUrls(
     const imagePath = path.join(assetDir, fileName);
 
     await fs.writeFile(imagePath, parsed.data);
-    updatedHtml = updatedHtml.replace(dataUrl, imagePath);
+    replacements.set(dataUrl, imagePath);
+  }
+
+  for (const [dataUrl, imagePath] of replacements.entries()) {
+    updatedHtml = updatedHtml.split(dataUrl).join(imagePath);
   }
 
   return updatedHtml;
