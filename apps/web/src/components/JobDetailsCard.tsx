@@ -4,6 +4,7 @@ import { getJobProgressInfo } from './jobProgress';
 type JobDetailsCardProps = {
   job: JobRecord;
   isExporting?: boolean;
+  exportPercent?: number;
   onExportHtml?: (job: JobRecord) => void;
   onExportPdf?: (job: JobRecord) => void;
   onExportEpub?: (job: JobRecord) => void;
@@ -29,12 +30,14 @@ function statusColor(status: JobStatus): string {
 export function JobDetailsCard({
   job,
   isExporting = false,
+  exportPercent = 0,
   onExportHtml,
   onExportPdf,
   onExportEpub,
   onExportAll
 }: JobDetailsCardProps) {
   const progress = getJobProgressInfo(job, isExporting ? 'export' : 'crawl');
+  const percent = isExporting ? exportPercent : progress.percent;
   const canExport = Boolean(job.extractedPages && job.extractedPages.length > 0);
 
   return (
@@ -42,12 +45,12 @@ export function JobDetailsCard({
       <div className="mb-4 rounded-md border border-slate-200 bg-slate-50 p-3">
         <div className="mb-1 flex items-center justify-between text-xs font-medium text-slate-700">
           <span>{progress.label}</span>
-          <span>{Math.round(progress.percent)}%</span>
+          <span>{Math.round(percent)}%</span>
         </div>
         <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
           <div
             className={`h-full rounded-full transition-all ${isExporting ? 'bg-indigo-600' : 'bg-blue-600'}`}
-            style={{ width: `${progress.percent}%` }}
+            style={{ width: `${percent}%` }}
           />
         </div>
         <p className="mt-2 text-xs text-slate-600">{progress.detail}</p>
