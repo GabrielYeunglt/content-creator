@@ -16,7 +16,7 @@ type Props = {
 
 type View = { mode: 'list' } | { mode: 'create' } | { mode: 'edit'; profileId: string };
 
-const metadataFields = ['title', 'author', 'volume', 'publisher', 'series', 'cover', 'language', 'description', 'other'] as const;
+const metadataFields = ['title', 'author', 'volume', 'publisher', 'series', 'subject', 'cover', 'language', 'description', 'other'] as const;
 const fileNameMetadataOptions = [...metadataFields, 'sourceDomain'];
 const titleMetadataTokens = ['{{metadata.title}}', '{{metadata.volume}}', '{{metadata.series}}'];
 

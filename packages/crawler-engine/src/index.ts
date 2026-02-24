@@ -18,7 +18,7 @@ export type CrawlSelectorRule = {
 };
 
 export type CrawlMetadataRule = {
-  fieldType: 'title' | 'author' | 'volume' | 'chapter' | 'publisher' | 'series' | 'cover' | 'language' | 'description' | 'other';
+  fieldType: 'title' | 'author' | 'volume' | 'chapter' | 'publisher' | 'series' | 'subject' | 'cover' | 'language' | 'description' | 'other';
   customFieldName?: string;
   selectorType: SelectorType;
   selector: string;

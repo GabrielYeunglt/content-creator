@@ -9,6 +9,7 @@ export type MetadataFieldType =
   | 'chapter'
   | 'publisher'
   | 'series'
+  | 'subject'
   | 'cover'
   | 'language'
   | 'description'
