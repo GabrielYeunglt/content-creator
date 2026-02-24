@@ -16,9 +16,9 @@ type Props = {
 
 type View = { mode: 'list' } | { mode: 'create' } | { mode: 'edit'; profileId: string };
 
-const metadataFields = ['title', 'author', 'chapter', 'publisher', 'series', 'cover', 'language', 'description', 'other'] as const;
+const metadataFields = ['title', 'author', 'volume', 'publisher', 'series', 'cover', 'language', 'description', 'other'] as const;
 const fileNameMetadataOptions = [...metadataFields, 'sourceDomain'];
-const titleMetadataTokens = ['{{metadata.title}}', '{{metadata.chapter}}', '{{metadata.series}}'];
+const titleMetadataTokens = ['{{metadata.title}}', '{{metadata.volume}}', '{{metadata.series}}'];
 
 export function JobProfileManagerPanel({ websiteProfiles, onJobProfilesChanged }: Props) {
   const initialJobProfiles = useMemo(() => readJobProfiles(), []);
@@ -178,7 +178,7 @@ export function JobProfileManagerPanel({ websiteProfiles, onJobProfilesChanged }
                           {token}
                         </button>
                       ))}
-                      <span style={{ fontSize: '0.8rem', color: '#475569' }}>Example: <code>{'{{metadata.title}}-{{metadata.chapter}}'}</code></span>
+                      <span style={{ fontSize: '0.8rem', color: '#475569' }}>Example: <code>{'{{metadata.title}}-{{metadata.volume}}'}</code></span>
                     </div>
                   )}
                 </div>
