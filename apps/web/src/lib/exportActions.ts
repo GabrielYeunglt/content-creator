@@ -150,6 +150,29 @@ export async function exportJobAsEpub(job: JobRecord): Promise<JobRecord[] | nul
   });
 }
 
+export async function exportJobAsPdf(job: JobRecord): Promise<JobRecord[] | null> {
+  if (job.exportDestination === 'browser-download') {
+    return updateJob(job.id, {
+      note: 'Current export destination is browser download. PDF requires desktop export destination.'
+    });
+  }
+
+  try {
+    const desktopExport = await runDesktopExport(job, 'pdf');
+    if (desktopExport) {
+      return desktopExport;
+    }
+  } catch (error) {
+    return updateJob(job.id, {
+      note: `PDF export failed: ${toErrorMessage(error)}`
+    });
+  }
+
+  return updateJob(job.id, {
+    note: 'PDF export requires the desktop/backend export bridge runtime.'
+  });
+}
+
 export async function exportJobAllViaDesktop(job: JobRecord): Promise<JobRecord[] | null> {
   if (job.exportDestination === 'browser-download') {
     return updateJob(job.id, {
