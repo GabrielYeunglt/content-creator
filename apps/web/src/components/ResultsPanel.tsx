@@ -24,6 +24,10 @@ function stopReasonHelp(stopReason: string | undefined): string | null {
     return 'Next URL left the configured domain. Update profile domain or pagination selector if needed.';
   }
 
+  if (stopReason === 'desktop-export-bridge-missing') {
+    return 'Selected job profile export destination is desktop, but export bridge is unavailable.';
+  }
+
   return null;
 }
 

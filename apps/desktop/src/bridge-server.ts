@@ -1,14 +1,15 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { buildCanonicalDocument } from '../../../packages/core/src/index.ts';
 import { crawlWithVirtualBrowser, type VirtualBrowserCrawlOptions } from '../../../packages/crawler-engine/src/index.ts';
 import {
   runExportPipeline,
   type ExportArtifact,
-  type ExportArtifactFormat
+  type ExportArtifactFormat,
+  type ExportLayout
 } from '../../../packages/export-engine/src/index.ts';
 
 type ExportRequest = {
@@ -18,12 +19,16 @@ type ExportRequest = {
     url: string;
     content?: string;
     preview: string;
+    metadata?: Record<string, string>;
     stylesheets?: string[];
     scripts?: string[];
   }>;
   profileName: string;
   profileDomain: string;
   crawlPagesTempFileId?: string;
+  exportDestination?: string;
+  exportFileNameTemplate?: string;
+  exportLayout?: ExportLayout;
 };
 
 type CrawlPageRecord = {
@@ -85,26 +90,54 @@ async function readJson<T>(req: IncomingMessage): Promise<T> {
 function sanitizeFilePart(value: string): string {
   return value
     .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9-_.]+/g, '-')
+    .replace(/[^\p{L}\p{N}\-_.]+/gu, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 80) || 'artifact';
 }
 
-function createArtifactPaths(request: ExportRequest): {
+function createArtifactPaths(request: ExportRequest, metadata: Record<string, string>, documentTitle: string): {
   htmlPath?: string;
   pdfPath?: string;
   epubPath?: string;
 } {
-  const now = new Date().toISOString().replaceAll(':', '-');
-  const baseName = `${sanitizeFilePart(request.jobId)}-${now}`;
+  const baseName = buildExportBaseName(request, metadata, documentTitle);
+  const destinationRoot = resolveArtifactRoot(request.exportDestination);
 
   const includeAll = request.format === 'all';
   return {
-    htmlPath: includeAll || request.format === 'html' ? join(artifactRoot, `${baseName}.html`) : undefined,
-    pdfPath: includeAll || request.format === 'pdf' ? join(artifactRoot, `${baseName}.pdf`) : undefined,
-    epubPath: includeAll || request.format === 'epub' ? join(artifactRoot, `${baseName}.epub`) : undefined
+    htmlPath: includeAll || request.format === 'html' ? join(destinationRoot, `${baseName}.html`) : undefined,
+    pdfPath: includeAll || request.format === 'pdf' ? join(destinationRoot, `${baseName}.pdf`) : undefined,
+    epubPath: includeAll || request.format === 'epub' ? join(destinationRoot, `${baseName}.epub`) : undefined
   };
+}
+
+function resolveArtifactRoot(exportDestination?: string): string {
+  const trimmed = exportDestination?.trim();
+  if (!trimmed || trimmed === 'desktop-artifacts' || trimmed === 'browser-download') {
+    return artifactRoot;
+  }
+
+  return resolve(trimmed);
+}
+
+function buildExportBaseName(request: ExportRequest, metadata: Record<string, string>, documentTitle: string): string {
+  const template = request.exportFileNameTemplate?.trim() || '{{job.id}}-{{date}}';
+  const now = new Date().toISOString().replaceAll(':', '-');
+
+  const rendered = template.replace(/\{\{\s*([^}]+)\s*\}\}/g, (_, tokenRaw: string) => {
+    const token = tokenRaw.trim();
+    if (token === 'job.id') return request.jobId;
+    if (token === 'date') return now;
+    if (token === 'profile.name') return request.profileName;
+    if (token === 'profile.domain') return request.profileDomain;
+    if (token === 'document.title') return documentTitle;
+    if (token.startsWith('metadata.')) {
+      return metadata[token.slice('metadata.'.length)] ?? '';
+    }
+    return '';
+  });
+
+  return sanitizeFilePart(rendered) || `${sanitizeFilePart(request.jobId)}-${now}`;
 }
 
 function coerceCrawlOptions(value: unknown): VirtualBrowserCrawlOptions {
@@ -119,8 +152,6 @@ async function handleExport(request: ExportRequest): Promise<{ artifacts: Export
   console.log(
     `[desktop-bridge] preparing export for job=${request.jobId} format=${request.format} pages=${request.pages.length}`
   );
-  await mkdir(artifactRoot, { recursive: true });
-
   const canonical = buildCanonicalDocument({
     jobId: request.jobId,
     profileName: request.profileName,
@@ -129,20 +160,33 @@ async function handleExport(request: ExportRequest): Promise<{ artifacts: Export
       url: page.url,
       content: page.content,
       preview: page.preview,
+      metadata: page.metadata,
       stylesheets: page.stylesheets,
       scripts: page.scripts
     }))
   });
 
-  const paths = createArtifactPaths(request);
+  const paths = createArtifactPaths(request, canonical.metadata, canonical.title);
+  const directories = new Set(
+    [paths.htmlPath, paths.pdfPath, paths.epubPath]
+      .filter((value): value is string => Boolean(value))
+      .map((outputPath) => dirname(outputPath))
+  );
+  await Promise.all(Array.from(directories).map((directoryPath) => mkdir(directoryPath, { recursive: true })));
   console.log(
     `[desktop-bridge] export output paths html=${paths.htmlPath ?? 'n/a'} pdf=${paths.pdfPath ?? 'n/a'} epub=${paths.epubPath ?? 'n/a'}`
   );
+  if (request.format === 'epub' || request.format === 'all') {
+    console.log(
+      `[desktop-bridge] epub diagnostics job=${request.jobId} metadataKeys=${Object.keys(canonical.metadata).join(',') || 'none'} chapterCount=${canonical.chapters.length}`
+    );
+  }
   const artifacts = await runExportPipeline({
     document: canonical,
     outputHtmlPath: paths.htmlPath,
     outputPdfPath: paths.pdfPath,
-    outputEpubPath: paths.epubPath
+    outputEpubPath: paths.epubPath,
+    exportLayout: request.exportLayout
   });
 
   const normalized = artifacts.map((artifact) => ({
@@ -165,15 +209,31 @@ async function resolveExportPages(request: ExportRequest): Promise<ExportRequest
     url: page.url,
     content: page.content,
     preview: page.content.slice(0, 240),
+    metadata: page.metadata,
     stylesheets: page.stylesheets,
     scripts: page.scripts
   }));
 
+  const mergedFromTemp = mappedFromTemp.map((page, index) => {
+    const requestPage = request.pages[index];
+    if (!requestPage) {
+      return page;
+    }
+
+    return {
+      ...page,
+      metadata: {
+        ...(page.metadata ?? {}),
+        ...(requestPage.metadata ?? {})
+      }
+    };
+  });
+
   if (!hasAnyInlineContent) {
-    return mappedFromTemp;
+    return mergedFromTemp;
   }
 
-  const tempByUrl = new Map(mappedFromTemp.map((page) => [page.url, page]));
+  const tempByUrl = new Map(mergedFromTemp.map((page) => [page.url, page]));
   return request.pages.map((page) => {
     if (page.content?.trim()) {
       return page;
@@ -188,6 +248,7 @@ async function resolveExportPages(request: ExportRequest): Promise<ExportRequest
       ...page,
       content: fallback.content,
       preview: page.preview || fallback.preview,
+      metadata: page.metadata ?? fallback.metadata,
       stylesheets: (page.stylesheets?.length ?? 0) > 0 ? page.stylesheets : fallback.stylesheets,
       scripts: (page.scripts?.length ?? 0) > 0 ? page.scripts : fallback.scripts
     };

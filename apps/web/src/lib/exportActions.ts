@@ -1,7 +1,16 @@
 import { buildCanonicalDocument } from '../../../../packages/core/src';
 import { renderCanonicalHtml } from '../../../../packages/export-engine/src';
+import { readSavedExportFormatConfig } from './exportFormatStorage';
 import { updateJob } from './jobStorage';
 import type { ExportedArtifactRecord, JobRecord } from '../types/job';
+
+function toErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return 'Unknown error';
+}
 
 function downloadTextFile(filename: string, content: string, mimeType: string): void {
   const blob = new Blob([content], { type: mimeType });
@@ -20,6 +29,36 @@ function canonicalFromJob(job: JobRecord) {
     profileDomain: job.profileDomain,
     pages: job.extractedPages ?? []
   });
+}
+
+function sanitizeFilePart(value: string): string {
+  return value
+    .trim()
+    .replace(/[^\p{L}\p{N}\-_.]+/gu, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 120) || 'artifact';
+}
+
+function buildExportBaseName(job: JobRecord): string {
+  const template = job.exportFileNameTemplate?.trim() || '{{job.id}}-{{date}}';
+  const now = new Date().toISOString().replaceAll(':', '-');
+  const metadata = job.consolidatedDocument?.metadata ?? {};
+  const documentTitle = job.consolidatedDocument?.title ?? job.profileName;
+
+  const rendered = template.replace(/\{\{\s*([^}]+)\s*\}\}/g, (_, tokenRaw: string) => {
+    const token = tokenRaw.trim();
+    if (token === 'job.id') return job.id;
+    if (token === 'date') return now;
+    if (token === 'profile.name') return job.profileName;
+    if (token === 'profile.domain') return job.profileDomain;
+    if (token === 'document.title') return documentTitle;
+    if (token.startsWith('metadata.')) {
+      return metadata[token.slice('metadata.'.length)] ?? '';
+    }
+    return '';
+  });
+
+  return sanitizeFilePart(rendered) || `${sanitizeFilePart(job.id)}-${now}`;
 }
 
 function getDesktopExportBridge() {
@@ -46,34 +85,64 @@ async function runDesktopExport(job: JobRecord, format: 'html' | 'pdf' | 'epub' 
     return null;
   }
 
+  const savedExportLayout = readSavedExportFormatConfig();
+
   const response = await bridge({
     jobId: job.id,
     format,
     pages: job.extractedPages ?? [],
     profileName: job.profileName,
     profileDomain: job.profileDomain,
-    crawlPagesTempFileId: job.crawlPagesTempFileId
+    crawlPagesTempFileId: job.crawlPagesTempFileId,
+    exportDestination: job.exportDestination,
+    exportFileNameTemplate: job.exportFileNameTemplate,
+    exportLayout: savedExportLayout ?? undefined
   });
 
   return persistArtifacts(job, response.artifacts);
 }
 
 export async function exportJobAsHtml(job: JobRecord): Promise<JobRecord[] | null> {
-  const desktopExport = await runDesktopExport(job, 'html');
-  if (desktopExport) {
-    return desktopExport;
+  if (job.exportDestination === 'browser-download') {
+    const canonical = canonicalFromJob(job);
+    const html = renderCanonicalHtml(canonical, readSavedExportFormatConfig() ?? undefined);
+    downloadTextFile(`${buildExportBaseName(job)}.html`, html, 'text/html;charset=utf-8');
+    return null;
+  }
+
+  try {
+    const desktopExport = await runDesktopExport(job, 'html');
+    if (desktopExport) {
+      return desktopExport;
+    }
+  } catch (error) {
+    return updateJob(job.id, {
+      note: `HTML export failed: ${toErrorMessage(error)}`
+    });
   }
 
   const canonical = canonicalFromJob(job);
-  const html = renderCanonicalHtml(canonical);
-  downloadTextFile(`${job.id}.html`, html, 'text/html;charset=utf-8');
+  const html = renderCanonicalHtml(canonical, readSavedExportFormatConfig() ?? undefined);
+  downloadTextFile(`${buildExportBaseName(job)}.html`, html, 'text/html;charset=utf-8');
   return null;
 }
 
 export async function exportJobAsEpub(job: JobRecord): Promise<JobRecord[] | null> {
-  const desktopExport = await runDesktopExport(job, 'epub');
-  if (desktopExport) {
-    return desktopExport;
+  if (job.exportDestination === 'browser-download') {
+    return updateJob(job.id, {
+      note: 'Current export destination is browser download. EPUB requires desktop export destination.'
+    });
+  }
+
+  try {
+    const desktopExport = await runDesktopExport(job, 'epub');
+    if (desktopExport) {
+      return desktopExport;
+    }
+  } catch (error) {
+    return updateJob(job.id, {
+      note: `EPUB export failed: ${toErrorMessage(error)}`
+    });
   }
 
   return updateJob(job.id, {
@@ -82,5 +151,17 @@ export async function exportJobAsEpub(job: JobRecord): Promise<JobRecord[] | nul
 }
 
 export async function exportJobAllViaDesktop(job: JobRecord): Promise<JobRecord[] | null> {
-  return runDesktopExport(job, 'all');
+  if (job.exportDestination === 'browser-download') {
+    return updateJob(job.id, {
+      note: 'Current export destination is browser download. Export all requires desktop export destination.'
+    });
+  }
+
+  try {
+    return await runDesktopExport(job, 'all');
+  } catch (error) {
+    return updateJob(job.id, {
+      note: `Export all failed: ${toErrorMessage(error)}`
+    });
+  }
 }
