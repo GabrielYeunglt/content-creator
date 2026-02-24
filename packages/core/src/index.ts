@@ -56,7 +56,7 @@ export function buildCanonicalDocument(params: {
     chapters: pages.map((page, index) => ({
       id: `${jobId}-chapter-${index + 1}`,
       sourceUrl: page.url,
-      title: page.metadata?.chapter || page.metadata?.title || `Chapter ${index + 1}`,
+      title: page.metadata?.volume || page.metadata?.chapter || page.metadata?.title || `Chapter ${index + 1}`,
       bodyHtml: page.content ?? page.preview,
       assets: {
         stylesheets: page.stylesheets ?? [],

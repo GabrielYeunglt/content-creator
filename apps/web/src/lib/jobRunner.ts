@@ -24,7 +24,7 @@ type VirtualBrowserCrawlRequest = {
     attributeUrlMode?: 'value' | 'fetch-image-data-url';
   };
   metadataRules?: Array<{
-    fieldType: 'title' | 'author' | 'chapter' | 'publisher' | 'series' | 'cover' | 'language' | 'description' | 'other';
+    fieldType: 'title' | 'author' | 'volume' | 'chapter' | 'publisher' | 'series' | 'cover' | 'language' | 'description' | 'other';
     customFieldName?: string;
     selectorType: 'css' | 'xpath';
     selector: string;
@@ -87,6 +87,30 @@ function normalizeDomain(domain: string): string {
   return domain.trim().replace(/^www\./, '').toLowerCase();
 }
 
+function metadataAliasKeys(key: string): string[] {
+  const normalized = key.trim().toLowerCase();
+  if (normalized === 'chapter' || normalized === 'volume') {
+    return ['chapter', 'volume'];
+  }
+
+  return [normalized];
+}
+
+function getMetadataValue(metadata: Record<string, string> | undefined, key: string): string {
+  if (!metadata) {
+    return '';
+  }
+
+  for (const alias of metadataAliasKeys(key)) {
+    const value = Object.entries(metadata).find(([metadataKey]) => metadataKey.toLowerCase() === alias)?.[1];
+    if (value) {
+      return value;
+    }
+  }
+
+  return '';
+}
+
 function resolveMetadataTemplate(template: string, metadata: Record<string, string> | undefined): string {
   return template.replace(/\{\{\s*metadata\.([^\s{}]+)\s*\}\}/g, (_match, rawKey: string) => {
     if (!metadata) {
@@ -94,8 +118,7 @@ function resolveMetadataTemplate(template: string, metadata: Record<string, stri
     }
 
     const key = rawKey.trim().toLowerCase();
-    const value = Object.entries(metadata).find(([metadataKey]) => metadataKey.toLowerCase() === key)?.[1];
-    return value ?? '';
+    return getMetadataValue(metadata, key);
   });
 }
 
@@ -194,6 +217,13 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
 
   try {
     const maxPages = Math.max(1, jobProfile?.maxPagesOverride ?? profile.stopRules.maxPages);
+    const activeMetadataRules = (profile.metadataRules ?? []).filter((rule) => {
+      const overrideValue = Object.entries(jobProfile?.metadataOverrides ?? {}).find(([key]) => (
+        metadataAliasKeys(key).includes(rule.fieldType.toLowerCase())
+        || metadataAliasKeys(rule.fieldType).includes(key.toLowerCase())
+      ))?.[1];
+      return !(overrideValue?.trim());
+    });
     const responses = await Promise.all(urlsToRun.map(async (url) => bridge({
       startUrl: url,
       domain: normalizeDomain(profile.domain),
@@ -204,7 +234,7 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
         attributeName: primaryRule.attributeName,
         attributeUrlMode: primaryRule.attributeUrlMode
       },
-      metadataRules: (profile.metadataRules ?? []).map((rule) => ({
+      metadataRules: activeMetadataRules.map((rule) => ({
         fieldType: rule.fieldType,
         customFieldName: rule.customFieldName,
         selectorType: rule.selectorType,

@@ -13,7 +13,7 @@ declare global {
         attributeUrlMode?: 'value' | 'fetch-image-data-url';
       };
       metadataRules?: Array<{
-        fieldType: 'title' | 'author' | 'chapter' | 'publisher' | 'series' | 'cover' | 'language' | 'description' | 'other';
+        fieldType: 'title' | 'author' | 'volume' | 'chapter' | 'publisher' | 'series' | 'cover' | 'language' | 'description' | 'other';
         customFieldName?: string;
         selectorType: 'css' | 'xpath';
         selector: string;

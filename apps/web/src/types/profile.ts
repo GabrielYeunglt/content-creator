@@ -5,6 +5,7 @@ export type AttributeUrlMode = 'value' | 'fetch-image-data-url';
 export type MetadataFieldType =
   | 'title'
   | 'author'
+  | 'volume'
   | 'chapter'
   | 'publisher'
   | 'series'
