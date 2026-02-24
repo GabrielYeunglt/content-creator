@@ -75,6 +75,8 @@ declare global {
       profileName: string;
       profileDomain: string;
       crawlPagesTempFileId?: string;
+      consolidatedTitle?: string;
+      consolidatedMetadata?: Record<string, string>;
       exportDestination?: string;
       exportFileNameTemplate?: string;
       exportLayout?: {

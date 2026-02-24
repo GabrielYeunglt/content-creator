@@ -26,6 +26,8 @@ type ExportRequest = {
   profileName: string;
   profileDomain: string;
   crawlPagesTempFileId?: string;
+  consolidatedTitle?: string;
+  consolidatedMetadata?: Record<string, string>;
   exportDestination?: string;
   exportFileNameTemplate?: string;
   exportLayout?: ExportLayout;
@@ -166,7 +168,18 @@ async function handleExport(request: ExportRequest): Promise<{ artifacts: Export
     }))
   });
 
-  const paths = createArtifactPaths(request, canonical.metadata, canonical.title);
+  const exportMetadata = {
+    ...canonical.metadata,
+    ...(request.consolidatedMetadata ?? {})
+  };
+  const exportTitle = request.consolidatedTitle?.trim() || exportMetadata.title?.trim() || canonical.title;
+  const exportDocument = {
+    ...canonical,
+    title: exportTitle,
+    metadata: exportMetadata
+  };
+
+  const paths = createArtifactPaths(request, exportDocument.metadata, exportDocument.title);
   const directories = new Set(
     [paths.htmlPath, paths.pdfPath, paths.epubPath]
       .filter((value): value is string => Boolean(value))
@@ -178,11 +191,11 @@ async function handleExport(request: ExportRequest): Promise<{ artifacts: Export
   );
   if (request.format === 'epub' || request.format === 'all') {
     console.log(
-      `[desktop-bridge] epub diagnostics job=${request.jobId} metadataKeys=${Object.keys(canonical.metadata).join(',') || 'none'} chapterCount=${canonical.chapters.length}`
+      `[desktop-bridge] epub diagnostics job=${request.jobId} metadataKeys=${Object.keys(exportDocument.metadata).join(',') || 'none'} chapterCount=${exportDocument.chapters.length}`
     );
   }
   const artifacts = await runExportPipeline({
-    document: canonical,
+    document: exportDocument,
     outputHtmlPath: paths.htmlPath,
     outputPdfPath: paths.pdfPath,
     outputEpubPath: paths.epubPath,

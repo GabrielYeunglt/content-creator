@@ -94,6 +94,8 @@ async function runDesktopExport(job: JobRecord, format: 'html' | 'pdf' | 'epub' 
     profileName: job.profileName,
     profileDomain: job.profileDomain,
     crawlPagesTempFileId: job.crawlPagesTempFileId,
+    consolidatedTitle: job.consolidatedDocument?.title,
+    consolidatedMetadata: job.consolidatedDocument?.metadata,
     exportDestination: job.exportDestination,
     exportFileNameTemplate: job.exportFileNameTemplate,
     exportLayout: savedExportLayout ?? undefined
