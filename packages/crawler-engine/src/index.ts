@@ -708,7 +708,8 @@ async function resolveContentValue(params: {
     const response = await page.context().request.get(absoluteUrl, {
       headers: {
         referer: baseUrl,
-        accept: 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8'
+        // Prefer broadly supported EPUB image formats. Some EPUB readers do not render WebP/AVIF in chapter content.
+        accept: 'image/png,image/jpeg,image/apng,image/*,*/*;q=0.8'
       }
     });
 

@@ -367,7 +367,7 @@ async function renderEpubFromCanonicalDocument(params: {
         appendChapterTitles?: boolean;
         customOpfTemplate?: string;
         customHtmlTocTemplate?: string;
-        content: Array<{ title: string; data: string }>;
+        content: Array<{ title: string; data: string; excludeFromToc?: boolean; beforeToc?: boolean }>;
       } & Record<string, unknown>,
       output: string
     ) => { promise?: Promise<unknown> };
@@ -377,8 +377,10 @@ async function renderEpubFromCanonicalDocument(params: {
     const assetDir = await createEpubAssetDirectory();
     const content = await prepareEpubContent(
       structuredPages.map((page) => ({
+        kind: page.kind,
         title: page.title,
-        bodyHtml: [page.headerHtml, page.bodyHtml, page.footerHtml].filter(Boolean).join('\n')
+        bodyHtml: [page.headerHtml, page.bodyHtml, page.footerHtml].filter(Boolean).join('\n'),
+        excludeFromToc: layout.disableTableOfContents || page.kind !== 'content'
       })),
       assetDir
     );
@@ -646,9 +648,9 @@ function toLabel(key: string): string {
 }
 
 async function prepareEpubContent(
-  chapters: Array<{ title: string; bodyHtml: string }>,
+  chapters: Array<{ kind: 'cover' | 'index' | 'content'; title: string; bodyHtml: string; excludeFromToc?: boolean }>,
   assetDir: string
-): Promise<Array<{ title: string; data: string }>> {
+): Promise<Array<{ title: string; data: string; excludeFromToc?: boolean; beforeToc?: boolean }>> {
   const cryptoModuleName = 'node:crypto';
 
   const pathModuleName = 'node:path';
@@ -663,7 +665,9 @@ async function prepareEpubContent(
   return Promise.all(
     chapters.map(async (chapter, chapterIndex) => ({
       title: chapter.title,
-      data: await replaceDataImageUrls(chapter.bodyHtml, assetDir, chapterIndex, createHash, fs, path)
+      data: await replaceDataImageUrls(chapter.bodyHtml, assetDir, chapterIndex, createHash, fs, path),
+      excludeFromToc: chapter.excludeFromToc,
+      beforeToc: chapter.kind === 'cover'
     }))
   );
 }
