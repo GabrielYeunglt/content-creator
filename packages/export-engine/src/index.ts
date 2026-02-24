@@ -519,12 +519,11 @@ async function postProcessEpub(
   options: { disableTableOfContents: boolean; series?: string }
 ): Promise<void> {
   const series = options.series?.trim();
-  if (!options.disableTableOfContents && !series) {
+  if (!series) {
     return;
   }
 
   const script = `
-import re
 import tempfile
 import zipfile
 from pathlib import Path
@@ -532,7 +531,6 @@ from xml.etree import ElementTree as ET
 
 path = Path(${JSON.stringify(outputEpubPath)})
 series = ${JSON.stringify(series ?? '')}.strip()
-disable_toc = ${JSON.stringify(options.disableTableOfContents)}
 
 with zipfile.ZipFile(path, 'r') as source_zip:
     container_xml = source_zip.read('META-INF/container.xml')
@@ -549,22 +547,26 @@ with zipfile.ZipFile(path, 'r') as source_zip, zipfile.ZipFile(tmp_path, 'w') as
         data = source_zip.read(item.filename)
 
         if item.filename == opf_path and series:
-            text = data.decode('utf-8')
-            if 'name="calibre:series"' in text:
-                text = re.sub(r'<meta\s+name="calibre:series"\s+content="[^"]*"\s*/?>', f'<meta name="calibre:series" content="{series}"/>', text)
-            else:
-                text = text.replace('</metadata>', f'\n    <meta name="calibre:series" content="{series}"/>\n  </metadata>')
-            data = text.encode('utf-8')
+            opf_root = ET.fromstring(data)
+            metadata = None
+            for node in opf_root.iter():
+                if node.tag.endswith('metadata'):
+                    metadata = node
+                    break
 
-        if disable_toc and item.filename.endswith('toc.xhtml'):
-            text = data.decode('utf-8')
-            text = re.sub(r'<ol[^>]*>[\s\S]*?</ol>', '<ol></ol>', text)
-            data = text.encode('utf-8')
+            if metadata is not None:
+                existing = None
+                for child in metadata:
+                    if child.tag.endswith('meta') and child.attrib.get('name') == 'calibre:series':
+                        existing = child
+                        break
 
-        if disable_toc and item.filename.endswith('.ncx'):
-            text = data.decode('utf-8')
-            text = re.sub(r'<navMap>[\s\S]*?</navMap>', '<navMap/>', text)
-            data = text.encode('utf-8')
+                if existing is None:
+                    existing = ET.SubElement(metadata, 'meta')
+                    existing.set('name', 'calibre:series')
+
+                existing.set('content', series)
+                data = ET.tostring(opf_root, encoding='utf-8', xml_declaration=True)
 
         target_zip.writestr(item, data)
 
