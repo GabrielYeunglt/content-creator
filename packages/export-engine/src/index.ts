@@ -558,7 +558,8 @@ async function prepareEpubContent(
     chapters.map(async (chapter, chapterIndex) => ({
       title: chapter.title,
       data: await replaceDataImageUrls(chapter.bodyHtml, assetDir, chapterIndex, createHash, fs, path),
-      excludeFromToc: false
+      // Keep a single TOC entry that points to the first rendered page.
+      excludeFromToc: chapterIndex !== 0
     }))
   );
 }
