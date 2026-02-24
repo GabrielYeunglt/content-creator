@@ -214,11 +214,26 @@ async function resolveExportPages(request: ExportRequest): Promise<ExportRequest
     scripts: page.scripts
   }));
 
+  const mergedFromTemp = mappedFromTemp.map((page, index) => {
+    const requestPage = request.pages[index];
+    if (!requestPage) {
+      return page;
+    }
+
+    return {
+      ...page,
+      metadata: {
+        ...(page.metadata ?? {}),
+        ...(requestPage.metadata ?? {})
+      }
+    };
+  });
+
   if (!hasAnyInlineContent) {
-    return mappedFromTemp;
+    return mergedFromTemp;
   }
 
-  const tempByUrl = new Map(mappedFromTemp.map((page) => [page.url, page]));
+  const tempByUrl = new Map(mergedFromTemp.map((page) => [page.url, page]));
   return request.pages.map((page) => {
     if (page.content?.trim()) {
       return page;
