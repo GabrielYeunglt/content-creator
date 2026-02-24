@@ -120,6 +120,9 @@ export function ProfileEditorForm({ mode, draft, onChange, onSave, onCancel }: P
             <p style={{ marginTop: 0 }}>
               If provided, these values override extracted metadata values in multi URL extraction jobs.
             </p>
+            <p style={{ marginTop: 0, fontSize: '0.8rem', color: '#475569' }}>
+              EPUB note: <code>series</code> is exported as <code>{'<opf:meta property="belongs-to-collection" id="id-2">...</opf:meta>'}</code>.
+            </p>
             <div style={{ display: 'grid', gap: '0.5rem' }}>
               {(['title', 'author', 'chapter', 'publisher', 'series', 'cover', 'language', 'description', 'other'] as const).map((field) => (
                 <label key={field}>
@@ -270,6 +273,9 @@ export function ProfileEditorForm({ mode, draft, onChange, onSave, onCancel }: P
 
         <fieldset style={{ border: '1px solid #ddd', padding: '0.75rem' }}>
           <legend>Optional Extraction Rules</legend>
+          <p style={{ marginTop: 0, fontSize: '0.8rem', color: '#475569' }}>
+            EPUB note: selecting <code>series</code> maps to OPF collection metadata.
+          </p>
           <div style={{ display: 'grid', gap: '0.75rem' }}>
             {addableRules.map((rule) => (
               <div key={rule.id} style={{ border: '1px solid #eee', padding: '0.5rem' }}>
