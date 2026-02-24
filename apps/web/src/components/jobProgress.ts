@@ -18,11 +18,18 @@ function estimateExportTotalSteps(job: JobRecord): number {
 }
 
 function detectCrawlTotalPages(job: JobRecord): number | null {
-  if (job.note) {
-    const match = job.note.match(/(?:total\s*pages?|pages\s*total)\D{0,5}(\d{1,5})/i);
-    if (match) {
-      return Number(match[1]);
-    }
+  if (!job.note) {
+    return null;
+  }
+
+  const fractionMatch = job.note.match(/(\d{1,5})\s*\/\s*(\d{1,5})\s*pages?/i);
+  if (fractionMatch) {
+    return Number(fractionMatch[2]);
+  }
+
+  const totalMatch = job.note.match(/(?:total\s*pages?|pages\s*total)\D{0,5}(\d{1,5})/i);
+  if (totalMatch) {
+    return Number(totalMatch[1]);
   }
 
   return null;
