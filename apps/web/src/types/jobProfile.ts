@@ -14,6 +14,7 @@ export type JobProfile = {
   metadataOverrides?: Partial<Record<MetadataFieldType | 'other', string>>;
   exportDestination?: ExportDestination;
   exportFileNameTemplate?: string;
+  titleOverrideTemplate?: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -28,6 +29,7 @@ export type JobProfileDraft = {
   metadataOverrides: Partial<Record<MetadataFieldType | 'other', string>>;
   exportDestination: ExportDestination;
   exportFileNameTemplate: string;
+  titleOverrideTemplate: string;
 };
 
 export function createDefaultJobProfileDraft(): JobProfileDraft {
@@ -40,6 +42,7 @@ export function createDefaultJobProfileDraft(): JobProfileDraft {
     maxPagesOverride: '',
     metadataOverrides: {},
     exportDestination: '',
-    exportFileNameTemplate: '{{job.id}}-{{date}}'
+    exportFileNameTemplate: '{{job.id}}-{{date}}',
+    titleOverrideTemplate: ''
   };
 }

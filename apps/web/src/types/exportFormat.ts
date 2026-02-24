@@ -10,6 +10,7 @@ export type ExportFormatConfig = ExportLayout;
 
 export const defaultExportFormatConfig: ExportFormatConfig = {
   disableTableOfContents: false,
+  disableMetadataPage: false,
   coverImageSource: 'metadata.cover',
   coverPage: {
     header: ['document.title'],

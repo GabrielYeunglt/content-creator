@@ -17,7 +17,8 @@ type Props = {
 type View = { mode: 'list' } | { mode: 'create' } | { mode: 'edit'; profileId: string };
 
 const metadataFields = ['title', 'author', 'chapter', 'publisher', 'series', 'cover', 'language', 'description', 'other'] as const;
-const fileNameMetadataOptions = [...metadataFields, 'sourceDomain'];
+const metadataOptions = [...metadataFields, 'sourceDomain'];
+const supportedTokenLabel = '{{job.id}} {{date}} {{profile.name}} {{profile.domain}} {{document.title}} {{metadata.key}}';
 
 export function JobProfileManagerPanel({ websiteProfiles, onJobProfilesChanged }: Props) {
   const initialJobProfiles = useMemo(() => readJobProfiles(), []);
@@ -25,7 +26,7 @@ export function JobProfileManagerPanel({ websiteProfiles, onJobProfilesChanged }
   const [view, setView] = useState<View>({ mode: 'list' });
   const [draft, setDraft] = useState<JobProfileDraft>(createDefaultJobProfileDraft());
   const [message, setMessage] = useState('');
-  const [selectedFileNameMetadata, setSelectedFileNameMetadata] = useState(fileNameMetadataOptions[0]);
+  const [selectedMetadataToken, setSelectedMetadataToken] = useState(metadataOptions[0]);
 
   function persist(updated: JobProfile[]) {
     setJobProfiles(updated);
@@ -77,11 +78,8 @@ export function JobProfileManagerPanel({ websiteProfiles, onJobProfilesChanged }
     setMessage('Job profile deleted.');
   }
 
-  function addMetadataTokenToFileName() {
-    updateDraft(
-      'exportFileNameTemplate',
-      `${draft.exportFileNameTemplate}{{metadata.${selectedFileNameMetadata}}}`
-    );
+  function addMetadataTokenToField(field: 'exportFileNameTemplate' | 'titleOverrideTemplate') {
+    updateDraft(field, `${draft[field]}{{metadata.${selectedMetadataToken}}}`);
   }
 
   return (
@@ -101,6 +99,7 @@ export function JobProfileManagerPanel({ websiteProfiles, onJobProfilesChanged }
               <p><strong>{profile.name}</strong></p>
               <p>Base profile: <code>{websiteProfiles.find((p) => p.id === profile.baseProfileId)?.name ?? profile.baseProfileId}</code></p>
               <p>Metadata overrides: {Object.values(profile.metadataOverrides ?? {}).filter((v) => Boolean(v?.trim())).length}</p>
+              <p>Title override: <code>{profile.titleOverrideTemplate || 'None'}</code></p>
               <p>Export destination: <code>{profile.exportDestination?.trim() || 'desktop-artifacts'}</code></p>
               <p>File name format: <code>{profile.exportFileNameTemplate ?? '{{job.id}}-{{date}}'}</code></p>
               <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -163,6 +162,22 @@ export function JobProfileManagerPanel({ websiteProfiles, onJobProfilesChanged }
           </fieldset>
           <fieldset style={{ border: '1px solid #ddd', padding: '0.75rem' }}>
             <legend>Export behavior</legend>
+            <label>Title override format (optional)
+              <input
+                value={draft.titleOverrideTemplate}
+                onChange={(event) => updateDraft('titleOverrideTemplate', event.target.value)}
+                placeholder="Example: {{metadata.series}} - {{metadata.chapter}}"
+                style={{ width: '100%' }}
+              />
+            </label>
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginTop: '0.5rem' }}>
+              <select value={selectedMetadataToken} onChange={(event) => setSelectedMetadataToken(event.target.value)}>
+                {metadataOptions.map((field) => (
+                  <option key={field} value={field}>{field}</option>
+                ))}
+              </select>
+              <button type="button" onClick={() => addMetadataTokenToField('titleOverrideTemplate')}>Add metadata to title format</button>
+            </div>
             <label>Export destination
               <input
                 type="text"
@@ -184,15 +199,15 @@ export function JobProfileManagerPanel({ websiteProfiles, onJobProfilesChanged }
               />
             </label>
             <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginTop: '0.5rem' }}>
-              <select value={selectedFileNameMetadata} onChange={(event) => setSelectedFileNameMetadata(event.target.value)}>
-                {fileNameMetadataOptions.map((field) => (
+              <select value={selectedMetadataToken} onChange={(event) => setSelectedMetadataToken(event.target.value)}>
+                {metadataOptions.map((field) => (
                   <option key={field} value={field}>{field}</option>
                 ))}
               </select>
-              <button type="button" onClick={addMetadataTokenToFileName}>Add metadata</button>
+              <button type="button" onClick={() => addMetadataTokenToField('exportFileNameTemplate')}>Add metadata to file name</button>
             </div>
             <p style={{ margin: '0.5rem 0 0' }}>
-              Supported tokens: <code>{'{{job.id}} {{date}} {{profile.name}} {{profile.domain}} {{document.title}} {{metadata.key}}'}</code>
+              Supported tokens: <code>{supportedTokenLabel}</code>
             </p>
           </fieldset>
           <div style={{ display: 'flex', gap: '0.5rem' }}>

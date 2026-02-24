@@ -24,11 +24,14 @@ function sanitizeTemplate(value: unknown, fallback: ExportFormatConfig['coverPag
 
 export function sanitizeExportFormatConfig(value: unknown): ExportFormatConfig {
   const candidate = value && typeof value === 'object'
-    ? (value as Partial<ExportFormatConfig> & { skipIndexPage?: boolean })
+    ? (value as Partial<ExportFormatConfig> & { skipIndexPage?: boolean; disableIndexPage?: boolean; skipCoverPage?: boolean; disableCoverPage?: boolean })
     : undefined;
 
+  const toBoolean = (input: unknown): boolean => input === true || input === 'true' || input === 1;
+
   return {
-    disableTableOfContents: Boolean(candidate?.disableTableOfContents ?? candidate?.skipIndexPage),
+    disableTableOfContents: toBoolean(candidate?.disableTableOfContents ?? candidate?.skipIndexPage ?? candidate?.disableIndexPage),
+    disableMetadataPage: toBoolean(candidate?.disableMetadataPage ?? candidate?.skipCoverPage ?? candidate?.disableCoverPage),
     coverImageSource: candidate?.coverImageSource === 'first-image-from-url' ? 'first-image-from-url' : 'metadata.cover',
     coverPage: sanitizeTemplate(candidate?.coverPage, defaultExportFormatConfig.coverPage),
     indexPage: sanitizeTemplate(candidate?.indexPage, defaultExportFormatConfig.indexPage),
