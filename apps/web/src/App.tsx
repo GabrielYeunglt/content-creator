@@ -45,21 +45,23 @@ export function App() {
   }
 
   return (
-    <main style={{ fontFamily: 'sans-serif', margin: '2rem', maxWidth: '960px' }}>
-      <h1>Content Creator</h1>
-      <p>V1 Step 9: backend desktop bridge service is available for virtual-browser crawl and runtime exports.</p>
+    <main className="mx-auto my-8 max-w-6xl rounded-xl bg-white p-6 shadow-sm">
+      <h1 className="text-3xl font-semibold text-slate-800">Content Creator</h1>
+      <p className="mt-2 text-sm text-slate-600">
+        V1 Step 9: backend desktop bridge service is available for virtual-browser crawl and runtime exports.
+      </p>
 
-      <nav style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+      <nav className="mb-6 mt-4 flex flex-wrap gap-2">
         {sections.map((section) => (
           <button
             key={section.id}
             type="button"
             onClick={() => setActiveSection(section.id)}
-            style={{
-              border: '1px solid #bbb',
-              background: activeSection === section.id ? '#e8f1ff' : 'white',
-              padding: '0.5rem 0.75rem'
-            }}
+            className={`rounded-md border px-3 py-2 text-sm transition ${
+              activeSection === section.id
+                ? 'border-blue-300 bg-blue-50 text-blue-800'
+                : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+            }`}
           >
             {section.label}
           </button>
