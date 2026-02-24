@@ -39,7 +39,19 @@ type CrawlPageRecord = {
   scripts: string[];
 };
 
+type CrawlProgressState = {
+  pagesProcessed: number;
+  totalPages?: number;
+  currentUrl?: string;
+  completed: boolean;
+};
+
+type CrawlRequestBody = VirtualBrowserCrawlOptions & {
+  crawlSessionId?: string;
+};
+
 const crawlPayloadDir = join(tmpdir(), 'content-creator-crawl-payloads');
+const crawlProgressBySession = new Map<string, CrawlProgressState>();
 
 function crawlPayloadPath(fileId: string): string {
   return join(crawlPayloadDir, `${fileId}.json`);
@@ -146,6 +158,14 @@ function coerceCrawlOptions(value: unknown): VirtualBrowserCrawlOptions {
   }
 
   return value as VirtualBrowserCrawlOptions;
+}
+
+function coerceCrawlRequestBody(value: unknown): CrawlRequestBody {
+  if (!value || typeof value !== 'object') {
+    throw new Error('Invalid crawl request body.');
+  }
+
+  return value as CrawlRequestBody;
 }
 
 async function handleExport(request: ExportRequest): Promise<{ artifacts: ExportArtifact[] }> {
@@ -276,9 +296,39 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
   }
 
   if (req.method === 'POST' && req.url === '/crawl') {
-    const body = await readJson<unknown>(req);
+    const body = coerceCrawlRequestBody(await readJson<unknown>(req));
+    const crawlSessionId = body.crawlSessionId?.trim() || undefined;
     console.log('[desktop-bridge] running crawl request');
-    const result = await crawlWithVirtualBrowser(coerceCrawlOptions(body));
+    if (crawlSessionId) {
+      crawlProgressBySession.set(crawlSessionId, { pagesProcessed: 0, completed: false });
+    }
+
+    const result = await crawlWithVirtualBrowser({
+      ...coerceCrawlOptions(body),
+      onPageCrawled: ({ pagesProcessed, totalPages, currentUrl }) => {
+        if (!crawlSessionId) {
+          return;
+        }
+
+        crawlProgressBySession.set(crawlSessionId, {
+          pagesProcessed,
+          totalPages,
+          currentUrl,
+          completed: false
+        });
+      }
+    });
+
+    if (crawlSessionId) {
+      crawlProgressBySession.set(crawlSessionId, {
+        pagesProcessed: result.pagesProcessed,
+        totalPages: undefined,
+        currentUrl: result.pages[result.pages.length - 1]?.url,
+        completed: true
+      });
+      setTimeout(() => crawlProgressBySession.delete(crawlSessionId), 60_000);
+    }
+
     const crawlPagesTempFileId = await writeCrawlPagesTempFile(result.pages as CrawlPageRecord[]);
     console.log(
       `[desktop-bridge] crawl completed pages=${result.pages.length} errors=${result.errors.length} notes=${result.notes.length} tempFile=${crawlPagesTempFileId}`
@@ -286,6 +336,22 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     sendJson(res, 200, {
       ...result,
       crawlPagesTempFileId
+    });
+    return;
+  }
+
+  if (req.method === 'GET' && req.url.startsWith('/crawl-progress')) {
+    const parsed = new URL(req.url, `http://${host}:${port}`);
+    const crawlSessionId = parsed.searchParams.get('sessionId')?.trim();
+    if (!crawlSessionId) {
+      sendJson(res, 400, { error: 'Missing sessionId.' });
+      return;
+    }
+
+    const progress = crawlProgressBySession.get(crawlSessionId);
+    sendJson(res, 200, {
+      found: Boolean(progress),
+      progress: progress ?? null
     });
     return;
   }
