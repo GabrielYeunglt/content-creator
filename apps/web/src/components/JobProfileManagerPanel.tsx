@@ -18,6 +18,7 @@ type View = { mode: 'list' } | { mode: 'create' } | { mode: 'edit'; profileId: s
 
 const metadataFields = ['title', 'author', 'chapter', 'publisher', 'series', 'cover', 'language', 'description', 'other'] as const;
 const fileNameMetadataOptions = [...metadataFields, 'sourceDomain'];
+const titleMetadataTokens = ['{{metadata.title}}', '{{metadata.chapter}}', '{{metadata.series}}'];
 
 export function JobProfileManagerPanel({ websiteProfiles, onJobProfilesChanged }: Props) {
   const initialJobProfiles = useMemo(() => readJobProfiles(), []);
@@ -82,6 +83,13 @@ export function JobProfileManagerPanel({ websiteProfiles, onJobProfilesChanged }
       'exportFileNameTemplate',
       `${draft.exportFileNameTemplate}{{metadata.${selectedFileNameMetadata}}}`
     );
+  }
+
+  function addTitleMetadataToken(token: string) {
+    updateDraft('metadataOverrides', {
+      ...draft.metadataOverrides,
+      title: `${draft.metadataOverrides.title ?? ''}${token}`
+    });
   }
 
   return (
@@ -149,15 +157,31 @@ export function JobProfileManagerPanel({ websiteProfiles, onJobProfilesChanged }
           </fieldset>
           <fieldset style={{ border: '1px solid #ddd', padding: '0.75rem' }}>
             <legend>Metadata overrides (optional)</legend>
+            <p style={{ marginTop: 0, fontSize: '0.8rem', color: '#475569' }}>
+              EPUB note: <code>series</code> writes to <code>{'<opf:meta property="belongs-to-collection" id="id-2">...</opf:meta>'}</code>.
+            </p>
             <div style={{ display: 'grid', gap: '0.5rem' }}>
               {metadataFields.map((field) => (
-                <label key={field}>{field}
-                  <input
-                    value={draft.metadataOverrides[field] ?? ''}
-                    onChange={(event) => updateDraft('metadataOverrides', { ...draft.metadataOverrides, [field]: event.target.value })}
-                    style={{ width: '100%' }}
-                  />
-                </label>
+                <div key={field} style={{ display: 'grid', gap: '0.25rem' }}>
+                  <label>{field}
+                    <input
+                      value={draft.metadataOverrides[field] ?? ''}
+                      onChange={(event) => updateDraft('metadataOverrides', { ...draft.metadataOverrides, [field]: event.target.value })}
+                      style={{ width: '100%' }}
+                    />
+                  </label>
+                  {field === 'title' && (
+                    <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: '0.8rem', color: '#475569' }}>Add token:</span>
+                      {titleMetadataTokens.map((token) => (
+                        <button key={token} type="button" onClick={() => addTitleMetadataToken(token)}>
+                          {token}
+                        </button>
+                      ))}
+                      <span style={{ fontSize: '0.8rem', color: '#475569' }}>Example: <code>{'{{metadata.title}}-{{metadata.chapter}}'}</code></span>
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
           </fieldset>

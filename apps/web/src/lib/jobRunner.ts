@@ -87,6 +87,38 @@ function normalizeDomain(domain: string): string {
   return domain.trim().replace(/^www\./, '').toLowerCase();
 }
 
+function resolveMetadataTemplate(template: string, metadata: Record<string, string> | undefined): string {
+  return template.replace(/\{\{\s*metadata\.([^\s{}]+)\s*\}\}/g, (_match, rawKey: string) => {
+    if (!metadata) {
+      return '';
+    }
+
+    const key = rawKey.trim().toLowerCase();
+    const value = Object.entries(metadata).find(([metadataKey]) => metadataKey.toLowerCase() === key)?.[1];
+    return value ?? '';
+  });
+}
+
+function resolveMetadataOverrides(
+  overrides: JobProfile['metadataOverrides'] | undefined,
+  metadata: Record<string, string> | undefined
+): Record<string, string> {
+  if (!overrides) {
+    return {};
+  }
+
+  const resolvedEntries = Object.entries(overrides).map(([key, value]) => {
+    const template = value?.trim() ?? '';
+    if (!template) {
+      return [key, ''];
+    }
+
+    return [key, resolveMetadataTemplate(template, metadata).trim()];
+  });
+
+  return Object.fromEntries(resolvedEntries);
+}
+
 function getDesktopCrawlerBridge():
   | ((request: VirtualBrowserCrawlRequest) => Promise<VirtualBrowserCrawlResponse>)
   | null {
@@ -214,7 +246,7 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
       preview: cleanPreview(item.content),
       metadata: {
         ...item.metadata,
-        ...(jobProfile?.metadataOverrides ?? {})
+        ...resolveMetadataOverrides(jobProfile?.metadataOverrides, item.metadata)
       },
       stylesheets: item.stylesheets,
       scripts: item.scripts

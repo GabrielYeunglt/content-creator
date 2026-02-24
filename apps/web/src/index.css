@@ -2,6 +2,28 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer components {
+  .table-generic {
+    @apply min-w-full divide-y divide-slate-200 text-sm;
+  }
+
+  .table-generic thead {
+    @apply bg-slate-50;
+  }
+
+  .table-generic th {
+    @apply px-3 py-2 text-left font-semibold text-slate-700;
+  }
+
+  .table-generic td {
+    @apply px-3 py-2 text-slate-700 align-top;
+  }
+
+  .table-generic tbody {
+    @apply divide-y divide-slate-100 bg-white;
+  }
+}
+
 body {
   @apply bg-slate-100 text-slate-900;
 }

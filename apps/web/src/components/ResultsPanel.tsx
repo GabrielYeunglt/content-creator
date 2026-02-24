@@ -1,34 +1,12 @@
+import { useState } from 'react';
 import { exportJobAllViaDesktop, exportJobAsEpub, exportJobAsHtml, exportJobAsPdf } from '../lib/exportActions';
 import type { JobRecord, JobStatus } from '../types/job';
+import { JobDetailsCard } from './JobDetailsCard';
 
 type ResultsPanelProps = {
   jobs: JobRecord[];
   onJobsUpdated: (jobs: JobRecord[]) => void;
 };
-
-function stopReasonHelp(stopReason: string | undefined): string | null {
-  if (!stopReason) {
-    return null;
-  }
-
-  if (stopReason === 'desktop-crawler-bridge-missing') {
-    return 'Crawler bridge is not connected. Run desktop/backend runtime and expose __CONTENT_CREATOR_DESKTOP_CRAWLER__.';
-  }
-
-  if (stopReason === 'virtual-browser-crawl-error') {
-    return 'Desktop crawl failed. Check backend logs, target URL reachability, and selector configuration.';
-  }
-
-  if (stopReason === 'out-of-domain-blocked') {
-    return 'Next URL left the configured domain. Update profile domain or pagination selector if needed.';
-  }
-
-  if (stopReason === 'desktop-export-bridge-missing') {
-    return 'Selected job profile export destination is desktop, but export bridge is unavailable.';
-  }
-
-  return null;
-}
 
 function statusColor(status: JobStatus): string {
   if (status === 'queued') return 'text-amber-700';
@@ -38,6 +16,8 @@ function statusColor(status: JobStatus): string {
 }
 
 export function ResultsPanel({ jobs, onJobsUpdated }: ResultsPanelProps) {
+  const [detailsJobId, setDetailsJobId] = useState<string | null>(null);
+
   async function handleExportHtml(job: JobRecord) {
     const updated = await exportJobAsHtml(job);
     if (updated) onJobsUpdated(updated);
@@ -58,6 +38,8 @@ export function ResultsPanel({ jobs, onJobsUpdated }: ResultsPanelProps) {
     if (updated) onJobsUpdated(updated);
   }
 
+  const selectedJob = jobs.find((job) => job.id === detailsJobId) ?? null;
+
   return (
     <section>
       <h2 className="text-xl font-semibold text-slate-800">Results</h2>
@@ -65,31 +47,59 @@ export function ResultsPanel({ jobs, onJobsUpdated }: ResultsPanelProps) {
 
       {jobs.length === 0 && <p className="mt-4 text-slate-500">No jobs recorded yet.</p>}
 
-      <div className="mt-4 space-y-3">
-        {jobs.map((job) => (
-          <article key={job.id} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-            <p><strong>{job.profileName}</strong> ({job.profileDomain})</p>
-            <p>URL: <code className="text-xs">{job.startUrl}</code></p>
-            <p>Status: <strong className={statusColor(job.status)}>{job.status}</strong></p>
-            <p>Created: {new Date(job.createdAt).toLocaleString()}</p>
-            {job.completedAt && <p>Completed: {new Date(job.completedAt).toLocaleString()}</p>}
-            {job.note && <p>Note: {job.note}</p>}
-            {typeof job.pagesProcessed === 'number' && <p>Pages processed: {job.pagesProcessed}</p>}
-            {job.stopReason && <p>Stop reason: {job.stopReason}</p>}
-            {stopReasonHelp(job.stopReason) && <p className="text-amber-700">Guidance: {stopReasonHelp(job.stopReason)}</p>}
-            {job.error && <p className="text-rose-700">Error: {job.error}</p>}
+      {jobs.length > 0 && (
+        <div className="mt-4 overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
+          <table className="table-generic">
+            <thead className="bg-slate-50">
+              <tr>
+                <th >Profile</th>
+                <th >Status</th>
+                <th >Created</th>
+                <th >Completed</th>
+                <th >Pages</th>
+                <th >Actions</th>
+              </tr>
+            </thead>
+            <tbody >
+              {jobs.map((job) => (
+                <tr key={job.id} className="align-top">
+                  <td >
+                    <p className="font-medium text-slate-900">{job.profileName}</p>
+                    <p className="text-xs text-slate-500">{job.profileDomain}</p>
+                  </td>
+                  <td ><span className={statusColor(job.status)}>{job.status}</span></td>
+                  <td >{new Date(job.createdAt).toLocaleString()}</td>
+                  <td >{job.completedAt ? new Date(job.completedAt).toLocaleString() : '-'}</td>
+                  <td >{typeof job.pagesProcessed === 'number' ? job.pagesProcessed : '-'}</td>
+                  <td >
+                    <div className="flex flex-wrap gap-2">
+                      <button type="button" onClick={() => setDetailsJobId(job.id)} className="rounded bg-slate-600 px-2 py-1 text-xs text-white">View details</button>
+                      {job.extractedPages && job.extractedPages.length > 0 && (
+                        <>
+                          <button type="button" onClick={() => void handleExportHtml(job)} className="rounded bg-slate-800 px-2 py-1 text-xs text-white">Export HTML</button>
+                          <button type="button" onClick={() => void handleExportPdf(job)} className="rounded bg-indigo-700 px-2 py-1 text-xs text-white">Export PDF</button>
+                          <button type="button" onClick={() => void handleExportEpub(job)} className="rounded bg-emerald-700 px-2 py-1 text-xs text-white">Export EPUB</button>
+                          <button type="button" onClick={() => void handleExportAll(job)} className="rounded bg-blue-700 px-2 py-1 text-xs text-white">Export all</button>
+                        </>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
-            {job.extractedPages && job.extractedPages.length > 0 && (
-              <div className="mb-2 mt-3 flex flex-wrap gap-2">
-                <button type="button" onClick={() => void handleExportHtml(job)} className="rounded bg-slate-800 px-3 py-1.5 text-sm text-white">Export HTML snapshot</button>
-                <button type="button" onClick={() => void handleExportPdf(job)} className="rounded bg-indigo-700 px-3 py-1.5 text-sm text-white">Export PDF</button>
-                <button type="button" onClick={() => void handleExportEpub(job)} className="rounded bg-emerald-700 px-3 py-1.5 text-sm text-white">Export EPUB</button>
-                <button type="button" onClick={() => void handleExportAll(job)} className="rounded bg-blue-700 px-3 py-1.5 text-sm text-white">Export all (desktop bridge)</button>
-              </div>
-            )}
-          </article>
-        ))}
-      </div>
+      {selectedJob && (
+        <div className="mt-4 space-y-2">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-slate-800">Job details</h3>
+            <button type="button" onClick={() => setDetailsJobId(null)} className="text-xs text-slate-600 underline">Close</button>
+          </div>
+          <JobDetailsCard job={selectedJob} />
+        </div>
+      )}
     </section>
   );
 }

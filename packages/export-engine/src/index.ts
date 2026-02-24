@@ -497,7 +497,7 @@ function buildCustomOpfTemplate(params: { series?: string }): string | undefined
     return undefined;
   }
 
-  return `<meta name="calibre:series" content="${escapeHtml(params.series)}"/>`;
+  return `<opf:meta property="belongs-to-collection" id="id-2">${escapeHtml(params.series)}</opf:meta>`;
 }
 
 
