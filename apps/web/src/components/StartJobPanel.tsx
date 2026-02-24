@@ -5,12 +5,14 @@ import { readRuntimeBridgeStatus } from '../lib/runtimeBridgeStatus';
 import type { JobMode, JobProfile } from '../types/jobProfile';
 import type { JobRecord } from '../types/job';
 import type { WebsiteProfile } from '../types/profile';
+import { JobDetailsCard } from './JobDetailsCard';
 
 const CREATE_PROFILE_OPTION_VALUE = '__create_profile__';
 
 type StartJobPanelProps = {
   profiles: WebsiteProfile[];
   jobProfiles: JobProfile[];
+  jobs: JobRecord[];
   onJobCreated: (jobs: JobRecord[]) => void;
   onRequestCreateProfile: () => void;
 };
@@ -23,7 +25,7 @@ function hostFromUrl(url: string): string | null {
   }
 }
 
-export function StartJobPanel({ profiles, jobProfiles, onJobCreated, onRequestCreateProfile }: StartJobPanelProps) {
+export function StartJobPanel({ profiles, jobProfiles, jobs, onJobCreated, onRequestCreateProfile }: StartJobPanelProps) {
   const [startUrl, setStartUrl] = useState('');
   const [multiUrlsInput, setMultiUrlsInput] = useState('');
   const [jobMode, setJobMode] = useState<JobMode>('single');
@@ -85,6 +87,11 @@ export function StartJobPanel({ profiles, jobProfiles, onJobCreated, onRequestCr
   const selectedJobProfile = useMemo(
     () => matchingJobProfiles.find((profile) => profile.id === selectedJobProfileId),
     [matchingJobProfiles, selectedJobProfileId]
+  );
+
+  const currentJob = useMemo(
+    () => [...jobs].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0] ?? null,
+    [jobs]
   );
 
   useEffect(() => {
@@ -192,37 +199,43 @@ export function StartJobPanel({ profiles, jobProfiles, onJobCreated, onRequestCr
   const shouldShowCreateOption = Boolean(targetHost) && matchingProfiles.length === 0;
 
   return (
-    <section>
-      <h2>Start Job</h2>
-      <p>Pick a website profile, optionally apply a job profile, then run single or multi URL extraction.</p>
-      <p style={{ color: runtimeBridgeStatus.crawlerBridgeReady ? '#1f7a1f' : '#8a4f00' }}>
-        Crawl runtime bridge: {runtimeBridgeStatus.crawlerBridgeReady ? 'connected' : 'not connected'}.
-      </p>
-      <p style={{ color: runtimeBridgeStatus.exportBridgeReady ? '#1f7a1f' : '#8a4f00' }}>
-        Export runtime bridge: {runtimeBridgeStatus.exportBridgeReady ? 'connected' : 'not connected'}.
-      </p>
+    <section className="space-y-4">
+      <div>
+        <h2 className="text-xl font-semibold text-slate-800">Start Job</h2>
+        <p className="mt-1 text-sm text-slate-600">Pick a website profile, optionally apply a job profile, then run single or multi URL extraction.</p>
+      </div>
+
+      <div className="grid gap-2 text-sm md:grid-cols-2">
+        <p className={`rounded border px-3 py-2 ${runtimeBridgeStatus.crawlerBridgeReady ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-700'}`}>
+          Crawl runtime bridge: <strong>{runtimeBridgeStatus.crawlerBridgeReady ? 'connected' : 'not connected'}</strong>
+        </p>
+        <p className={`rounded border px-3 py-2 ${runtimeBridgeStatus.exportBridgeReady ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-700'}`}>
+          Export runtime bridge: <strong>{runtimeBridgeStatus.exportBridgeReady ? 'connected' : 'not connected'}</strong>
+        </p>
+      </div>
+
       {!runtimeBridgeStatus.crawlerBridgeReady && (
-        <p style={{ color: '#8a4f00' }}>
+        <p className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
           Start Job in this build expects a desktop/backend crawl bridge for Playwright execution. If your setup injects the bridge,
           crawling will run; otherwise this standalone app fails fast.
         </p>
       )}
 
-      <form onSubmit={handleSubmit} style={{ display: 'grid', gap: '0.75rem', maxWidth: '680px' }}>
-        <label>
+      <form onSubmit={handleSubmit} className="grid max-w-3xl gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
+        <label className="text-sm font-medium text-slate-700">
           Job Mode
-          <select value={jobMode} onChange={(event) => setJobMode(event.target.value as JobMode)} style={{ width: '100%' }}>
+          <select value={jobMode} onChange={(event) => setJobMode(event.target.value as JobMode)} className="mt-1 w-full rounded border border-slate-300 bg-white px-2 py-2 text-sm">
             <option value="single">Single URL</option>
             <option value="multi">Multiple URLs</option>
           </select>
         </label>
 
-        <label>
+        <label className="text-sm font-medium text-slate-700">
           Website Profile
           <select
             value={selectedProfileId}
             onChange={(event) => handleProfileSelectionChange(event.target.value)}
-            style={{ width: '100%' }}
+            className="mt-1 w-full rounded border border-slate-300 bg-white px-2 py-2 text-sm"
           >
             {!shouldShowCreateOption && <option value="">Select profile...</option>}
             {matchingProfiles.map((profile) => (
@@ -236,12 +249,12 @@ export function StartJobPanel({ profiles, jobProfiles, onJobCreated, onRequestCr
           </select>
         </label>
 
-        <label>
+        <label className="text-sm font-medium text-slate-700">
           Job Profile Overrides (optional)
           <select
             value={selectedJobProfileId}
             onChange={(event) => setSelectedJobProfileId(event.target.value)}
-            style={{ width: '100%' }}
+            className="mt-1 w-full rounded border border-slate-300 bg-white px-2 py-2 text-sm"
             disabled={!selectedProfile}
           >
             <option value="">None</option>
@@ -252,42 +265,53 @@ export function StartJobPanel({ profiles, jobProfiles, onJobCreated, onRequestCr
         </label>
 
         {jobMode === 'multi' ? (
-          <label>
+          <label className="text-sm font-medium text-slate-700">
             Chapter URLs (comma, newline, or ';' separated)
             <textarea
               placeholder={'https://example.com/chapter-1\nhttps://example.com/chapter-2'}
               value={multiUrlsInput}
               onChange={(event) => setMultiUrlsInput(event.target.value)}
-              style={{ width: '100%', minHeight: '120px' }}
+              className="mt-1 min-h-[120px] w-full rounded border border-slate-300 bg-white px-2 py-2 text-sm"
             />
           </label>
         ) : (
-          <label>
+          <label className="text-sm font-medium text-slate-700">
             Starting URL
             <input
               type="url"
               placeholder="https://example.com/content/chapter-1"
               value={startUrl}
               onChange={(event) => setStartUrl(event.target.value)}
-              style={{ width: '100%' }}
+              className="mt-1 w-full rounded border border-slate-300 bg-white px-2 py-2 text-sm"
             />
           </label>
         )}
 
-        <button type="submit" disabled={isSubmitting || profiles.length === 0 || shouldShowCreateOption}>
+        <button
+          type="submit"
+          disabled={isSubmitting || profiles.length === 0 || shouldShowCreateOption}
+          className="rounded bg-blue-700 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-slate-400"
+        >
           {isSubmitting ? 'Running...' : jobMode === 'multi' ? 'Start Multi URL Extraction' : 'Start Crawl Job'}
         </button>
       </form>
 
       {profiles.length === 0 && (
-        <p style={{ color: '#8a4f00' }}>No profiles available. Create one in Profile Manager first.</p>
+        <p className="text-sm text-amber-700">No profiles available. Create one in Profile Manager first.</p>
       )}
       {shouldShowCreateOption && (
-        <p style={{ color: '#8a4f00' }}>
+        <p className="text-sm text-amber-700">
           No profile matches <code>{targetHost}</code>. Choose "Create new profile for this domain...".
         </p>
       )}
-      {message && <p>{message}</p>}
+      {message && <p className="text-sm text-slate-700">{message}</p>}
+
+      {currentJob && (
+        <div className="space-y-2">
+          <h3 className="text-sm font-semibold text-slate-800">Current job snapshot</h3>
+          <JobDetailsCard job={currentJob} />
+        </div>
+      )}
     </section>
   );
 }

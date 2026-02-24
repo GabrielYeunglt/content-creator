@@ -1,4 +1,5 @@
 import type { JobRecord, JobStatus } from '../types/job';
+import { getJobProgressInfo } from './jobProgress';
 
 type JobDetailsCardProps = {
   job: JobRecord;
@@ -21,8 +22,24 @@ function statusColor(status: JobStatus): string {
 }
 
 export function JobDetailsCard({ job }: JobDetailsCardProps) {
+  const progress = getJobProgressInfo(job);
+
   return (
     <article className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="mb-4 rounded-md border border-slate-200 bg-slate-50 p-3">
+        <div className="mb-1 flex items-center justify-between text-xs font-medium text-slate-700">
+          <span>{progress.label}</span>
+          <span>{Math.round(progress.percent)}%</span>
+        </div>
+        <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
+          <div
+            className="h-full rounded-full bg-blue-600 transition-all"
+            style={{ width: `${progress.percent}%` }}
+          />
+        </div>
+        <p className="mt-2 text-xs text-slate-600">{progress.detail}</p>
+      </div>
+
       <div className="grid gap-1 text-sm text-slate-700">
         <p><strong>Job:</strong> <code>{job.id}</code></p>
         <p><strong>Status:</strong> <span className={statusColor(job.status)}>{job.status}</span></p>
