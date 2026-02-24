@@ -538,6 +538,9 @@ XHTML_NS = 'http://www.w3.org/1999/xhtml'
 def local_name(tag: str) -> str:
     return tag.rsplit('}', 1)[-1]
 
+def normalize_href(value: str) -> str:
+    return value.strip().split('#', 1)[0].split('?', 1)[0].lower()
+
 def ensure_rendition_metadata(metadata):
     wanted = {
         'rendition:layout': 'pre-paginated',
@@ -687,6 +690,51 @@ with zipfile.ZipFile(path, 'r') as source_zip:
             href = manifest_by_id.get(idref, '')
             if href.lower().endswith(('.xhtml', '.html', '.htm')):
                 node.set('properties', 'rendition:layout-pre-paginated')
+
+    if manifest is not None and spine is not None:
+        existing_itemrefs = [node for node in spine if local_name(node.tag) == 'itemref']
+        referenced_ids = [node.attrib.get('idref', '') for node in existing_itemrefs if node.attrib.get('idref')]
+        referenced_docs = [normalize_href(manifest_by_id.get(idref, '')) for idref in referenced_ids]
+
+        all_xhtml_manifest_ids = []
+        toc_item_ids = set()
+
+        for item in manifest:
+            if local_name(item.tag) != 'item':
+                continue
+
+            item_id = item.attrib.get('id', '')
+            href = item.attrib.get('href', '')
+            media_type = item.attrib.get('media-type', '')
+            props = (item.attrib.get('properties') or '').lower().split()
+            href_normalized = normalize_href(href)
+
+            if media_type in ('application/x-dtbncx+xml',):
+                toc_item_ids.add(item_id)
+                continue
+
+            if media_type == 'application/xhtml+xml' and item_id:
+                all_xhtml_manifest_ids.append(item_id)
+                if 'nav' in props or href_normalized.endswith(('toc.xhtml', 'toc.html', 'toc.htm')):
+                    toc_item_ids.add(item_id)
+
+        non_toc_referenced_docs = [href for href in referenced_docs if href and not href.endswith(('toc.xhtml', 'toc.html', 'toc.htm'))]
+
+        # Some malformed EPUBs generated in post-processing end up with a spine that only references TOC.
+        # If we detect that condition, repopulate spine order from XHTML manifest entries while keeping TOC first.
+        if all_xhtml_manifest_ids and not non_toc_referenced_docs:
+            for node in existing_itemrefs:
+                spine.remove(node)
+
+            ordered_ids = [item_id for item_id in all_xhtml_manifest_ids if item_id in toc_item_ids]
+            ordered_ids.extend(item_id for item_id in all_xhtml_manifest_ids if item_id not in toc_item_ids)
+
+            for item_id in ordered_ids:
+                itemref = ET.SubElement(spine, f'{{{OPF_NS}}}itemref')
+                itemref.set('idref', item_id)
+                href = manifest_by_id.get(item_id, '')
+                if href.lower().endswith(('.xhtml', '.html', '.htm')):
+                    itemref.set('properties', 'rendition:layout-pre-paginated')
 
     if manifest is not None and spine is not None:
         for item in manifest:
