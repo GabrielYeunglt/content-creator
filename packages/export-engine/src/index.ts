@@ -400,7 +400,7 @@ async function renderEpubFromCanonicalDocument(params: {
         description: bookDescription,
         language: bookLanguage,
         appendChapterTitles: false,
-        customOpfTemplate: buildCustomOpfTemplate({ series: bookSeries }),
+        customOpfTemplate: buildCustomOpfTemplate({ series: bookSeries, subject: getMetadataValue(document, ['subject']), language: bookLanguage }),
         content
       },
       outputEpubPath
@@ -492,12 +492,23 @@ function getMetadataValue(document: CanonicalDocument, candidates: string[]): st
   return undefined;
 }
 
-function buildCustomOpfTemplate(params: { series?: string }): string | undefined {
-  if (!params.series) {
-    return undefined;
+function buildCustomOpfTemplate(params: { series?: string; subject?: string; language?: string }): string | undefined {
+  const metadataLines: string[] = [];
+
+  if (params.series) {
+    metadataLines.push(`<opf:meta property="belongs-to-collection" id="id-2">${escapeHtml(params.series)}</opf:meta>`);
+    metadataLines.push('<opf:meta refines="#id-2" property="collection-type">series</opf:meta>');
   }
 
-  return `<opf:meta property="belongs-to-collection" id="id-2">${escapeHtml(params.series)}</opf:meta>`;
+  if (params.subject) {
+    metadataLines.push(`<dc:subject>${escapeHtml(params.subject)}</dc:subject>`);
+  }
+
+  if (params.language) {
+    metadataLines.push(`<dc:language>${escapeHtml(params.language)}</dc:language>`);
+  }
+
+  return metadataLines.length ? metadataLines.join('\n') : undefined;
 }
 
 

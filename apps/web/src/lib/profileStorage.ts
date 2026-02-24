@@ -21,10 +21,10 @@ function validSelectorType(value: string): value is SelectorType {
   return value === 'css' || value === 'xpath';
 }
 
-function normalizeMetadataFieldType(fieldType: string | undefined): 'title' | 'author' | 'volume' | 'chapter' | 'publisher' | 'series' | 'cover' | 'language' | 'description' | 'other' {
+function normalizeMetadataFieldType(fieldType: string | undefined): 'title' | 'author' | 'volume' | 'chapter' | 'publisher' | 'series' | 'subject' | 'cover' | 'language' | 'description' | 'other' {
   if (fieldType === 'volume') return 'volume';
   if (fieldType === 'chapter') return 'volume';
-  if (fieldType === 'title' || fieldType === 'author' || fieldType === 'publisher' || fieldType === 'series' || fieldType === 'cover' || fieldType === 'language' || fieldType === 'description' || fieldType === 'other') {
+  if (fieldType === 'title' || fieldType === 'author' || fieldType === 'publisher' || fieldType === 'series' || fieldType === 'subject' || fieldType === 'cover' || fieldType === 'language' || fieldType === 'description' || fieldType === 'other') {
     return fieldType;
   }
 
