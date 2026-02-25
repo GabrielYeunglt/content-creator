@@ -116,6 +116,8 @@ type PlaywrightPageLike = {
   waitForSelector: (selector: string, opts: { timeout: number; state?: 'attached' | 'visible' }) => Promise<unknown>;
   click: (selector: string, opts: { timeout: number }) => Promise<void>;
   waitForTimeout: (timeout: number) => Promise<void>;
+  url: () => string;
+  title: () => Promise<string>;
   context: () => {
     request: {
       get: (url: string, opts?: { headers?: Record<string, string> }) => Promise<{
@@ -126,6 +128,12 @@ type PlaywrightPageLike = {
       }>;
     };
   };
+};
+
+type SelectorPresenceDiagnostics = {
+  found: boolean;
+  iframeSources: string[];
+  bodyTextSample: string;
 };
 
 class CrawlCancelledError extends Error {
@@ -431,6 +439,60 @@ function toCssSelector(selectorType: SelectorType, selector: string): string {
   return `xpath=${selector}`;
 }
 
+async function collectSelectorPresenceDiagnostics(
+  page: PlaywrightPageLike,
+  selectorType: SelectorType,
+  selector: string
+): Promise<SelectorPresenceDiagnostics> {
+  return page.evaluate(
+    ({ selectorType: type, selector: value }) => {
+      let found = false;
+      try {
+        if (type === 'css') {
+          found = document.querySelector(value) !== null;
+        } else {
+          found = document.evaluate(value, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue !== null;
+        }
+      } catch {
+        found = false;
+      }
+
+      const iframeSources = Array.from(document.querySelectorAll('iframe'))
+        .map((iframe) => iframe.getAttribute('src')?.trim() ?? '')
+        .filter((src) => src.length > 0)
+        .slice(0, 5);
+
+      return {
+        found,
+        iframeSources,
+        bodyTextSample: (document.body?.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, 160)
+      };
+    },
+    { selectorType, selector }
+  );
+}
+
+async function augmentSelectorTimeoutError(
+  page: PlaywrightPageLike,
+  selectorType: SelectorType,
+  selector: string,
+  error: unknown
+): Promise<Error> {
+  const baseMessage = error instanceof Error ? error.message : 'Unknown selector wait error';
+
+  try {
+    const [diagnostics, title] = await Promise.all([
+      collectSelectorPresenceDiagnostics(page, selectorType, selector),
+      page.title()
+    ]);
+
+    const message = `${baseMessage} (debug: pageUrl=${page.url()}, pageTitle=${JSON.stringify(title)}, selectorFoundInMainDocument=${diagnostics.found}, iframeCount=${diagnostics.iframeSources.length}, iframeSources=${JSON.stringify(diagnostics.iframeSources)}, bodyTextSample=${JSON.stringify(diagnostics.bodyTextSample)})`;
+    return new Error(message);
+  } catch {
+    return new Error(`${baseMessage} (debug: failed to collect timeout diagnostics)`);
+  }
+}
+
 export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOptions): Promise<CrawlResult> {
   const { chromium } = await loadPlaywright();
   const {
@@ -542,7 +604,11 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
 
             if (contentReadySelector) {
               const readySelector = toCssSelector(contentReadySelector.selectorType, contentReadySelector.selector);
-              await page.waitForSelector(readySelector, { timeout: contentReadySelector.timeoutMs ?? timeoutMs, state: 'attached' });
+              try {
+                await page.waitForSelector(readySelector, { timeout: contentReadySelector.timeoutMs ?? timeoutMs, state: 'attached' });
+              } catch (error) {
+                throw await augmentSelectorTimeoutError(page, contentReadySelector.selectorType, contentReadySelector.selector, error);
+              }
             }
 
             visited.add(currentUrl);
