@@ -18,6 +18,13 @@ type ProfileEditorFormProps = {
   onCancel: () => void;
 };
 
+const inputClassName =
+  'mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm transition focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-200';
+const labelClassName = 'text-sm font-medium text-slate-800';
+const fieldsetClassName = 'rounded-lg border border-slate-200 bg-white p-4 shadow-sm';
+const buttonClassName =
+  'inline-flex items-center rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-800 shadow-sm transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-200';
+
 export function ProfileEditorForm({ mode, draft, onChange, onSave, onCancel }: ProfileEditorFormProps) {
   const [sampleHtml, setSampleHtml] = useState('');
   const [testOutput, setTestOutput] = useState('');
@@ -90,27 +97,28 @@ export function ProfileEditorForm({ mode, draft, onChange, onSave, onCancel }: P
   const addableRules = draft.extractionRules.filter((rule) => !rule.showByDefault);
 
   return (
-    <section>
-      <h3>{mode === 'create' ? 'Create Profile' : 'Edit Profile'}</h3>
-      <div style={{ display: 'grid', gap: '0.75rem', maxWidth: '520px', marginBottom: '1rem' }}>
-        <label>
+    <section className="space-y-4">
+      <h3 className="text-xl font-semibold text-slate-900">{mode === 'create' ? 'Create Profile' : 'Edit Profile'}</h3>
+      <div className="grid max-w-2xl gap-3">
+        <label className={labelClassName}>
           Profile Name
-          <input value={draft.name} onChange={(event) => onChange('name', event.target.value)} style={{ width: '100%' }} />
+          <input className={inputClassName} value={draft.name} onChange={(event) => onChange('name', event.target.value)} />
         </label>
 
-        <label>
+        <label className={labelClassName}>
           Domain
           <input
+            className={inputClassName}
             placeholder="example.com"
             value={draft.domain}
             onChange={(event) => onChange('domain', event.target.value)}
-            style={{ width: '100%' }}
           />
         </label>
 
-        <label>
+        <label className={labelClassName}>
           Profile Mode
           <select
+            className={inputClassName}
             value={draft.profileType}
             onChange={(event) => onChange('profileType', event.target.value as 'single-url' | 'multi-url')}
           >
@@ -120,25 +128,25 @@ export function ProfileEditorForm({ mode, draft, onChange, onSave, onCancel }: P
         </label>
 
         {draft.profileType === 'multi-url' && (
-          <fieldset style={{ border: '1px solid #ddd', padding: '0.75rem' }}>
-            <legend>Multi URL metadata overrides (optional)</legend>
-            <p style={{ marginTop: 0 }}>
+          <fieldset className={fieldsetClassName}>
+            <legend className="px-1 text-sm font-semibold text-slate-800">Multi URL metadata overrides (optional)</legend>
+            <p className="text-sm text-slate-600">
               If provided, these values override extracted metadata values in multi URL extraction jobs.
             </p>
-            <p style={{ marginTop: 0, fontSize: '0.8rem', color: '#475569' }}>
+            <p className="text-xs text-slate-600">
               EPUB note: <code>series</code> is exported as <code>{'<opf:meta property="belongs-to-collection" id="id-2">...</opf:meta>'}</code>.
             </p>
-            <div style={{ display: 'grid', gap: '0.5rem' }}>
+            <div className="grid gap-2">
               {(['title', 'author', 'volume', 'publisher', 'series', 'subject', 'cover', 'language', 'description', 'other'] as const).map((field) => (
-                <label key={field}>
+                <label key={field} className={labelClassName}>
                   {field}
                   <input
+                    className={inputClassName}
                     value={draft.multiUrlOverrides[field] ?? ''}
                     onChange={(event) => onChange('multiUrlOverrides', {
                       ...draft.multiUrlOverrides,
                       [field]: event.target.value
                     })}
-                    style={{ width: '100%' }}
                   />
                 </label>
               ))}
@@ -147,12 +155,13 @@ export function ProfileEditorForm({ mode, draft, onChange, onSave, onCancel }: P
         )}
 
         {autoVisibleRules.map((rule) => (
-          <fieldset key={rule.id} style={{ border: '1px solid #ddd', padding: '0.75rem' }}>
-            <legend>{rule.label}</legend>
-            <div style={{ display: 'grid', gap: '0.5rem' }}>
+          <fieldset key={rule.id} className={fieldsetClassName}>
+            <legend className="px-1 text-sm font-semibold text-slate-800">{rule.label}</legend>
+            <div className="grid gap-2">
               {typeof rule.optional === 'boolean' && (
-                <label style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                <label className="inline-flex items-center gap-2 text-sm text-slate-700">
                   <input
+                    className="h-4 w-4 rounded border-slate-300 text-slate-700 focus:ring-slate-300"
                     type="checkbox"
                     checked={rule.optional}
                     onChange={(event) => updateExtractionRule(rule.id, { optional: event.target.checked })}
@@ -162,19 +171,20 @@ export function ProfileEditorForm({ mode, draft, onChange, onSave, onCancel }: P
               )}
 
               {rule.type === 'content' && (
-                <label>
+                <label className={labelClassName}>
                   Field Name
                   <input
+                    className={inputClassName}
                     value={rule.fieldName ?? ''}
                     onChange={(event) => updateExtractionRule(rule.id, { fieldName: event.target.value })}
-                    style={{ width: '100%' }}
                   />
                 </label>
               )}
 
-              <label>
+              <label className={labelClassName}>
                 Selector Type
                 <select
+                  className={inputClassName}
                   value={rule.selectorType}
                   onChange={(event) => updateExtractionRule(rule.id, { selectorType: event.target.value as SelectorType })}
                 >
@@ -183,19 +193,20 @@ export function ProfileEditorForm({ mode, draft, onChange, onSave, onCancel }: P
                 </select>
               </label>
 
-              <label>
+              <label className={labelClassName}>
                 Selector
                 <input
+                  className={inputClassName}
                   value={rule.selector}
                   onChange={(event) => updateExtractionRule(rule.id, { selector: event.target.value })}
-                  style={{ width: '100%' }}
                 />
               </label>
 
               {rule.type !== 'pagination' && (
-                <label>
+                <label className={labelClassName}>
                   Extract Mode
                   <select
+                    className={inputClassName}
                     value={rule.extractMode}
                     onChange={(event) => updateExtractionRule(rule.id, { extractMode: event.target.value as ExtractMode })}
                   >
@@ -206,19 +217,20 @@ export function ProfileEditorForm({ mode, draft, onChange, onSave, onCancel }: P
                 </label>
               )}
 
-              <label>
+              <label className={labelClassName}>
                 Attribute Name
                 <input
+                  className={inputClassName}
                   value={rule.attributeName}
                   onChange={(event) => updateExtractionRule(rule.id, { attributeName: event.target.value })}
-                  style={{ width: '100%' }}
                 />
               </label>
 
               {rule.type !== 'total-pages' && (
-                <label>
+                <label className={labelClassName}>
                   Attribute URL Handling
                   <select
+                    className={inputClassName}
                     value={rule.attributeUrlMode}
                     onChange={(event) => updateExtractionRule(rule.id, { attributeUrlMode: event.target.value as AttributeUrlMode })}
                     disabled={rule.extractMode !== 'attribute'}
@@ -230,8 +242,9 @@ export function ProfileEditorForm({ mode, draft, onChange, onSave, onCancel }: P
               )}
 
               {rule.type === 'content' && (
-                <label style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                <label className="inline-flex items-center gap-2 text-sm text-slate-700">
                   <input
+                    className="h-4 w-4 rounded border-slate-300 text-slate-700 focus:ring-slate-300"
                     type="checkbox"
                     checked={rule.required ?? true}
                     onChange={(event) => updateExtractionRule(rule.id, { required: event.target.checked })}
@@ -241,9 +254,10 @@ export function ProfileEditorForm({ mode, draft, onChange, onSave, onCancel }: P
               )}
 
               {rule.type === 'pagination' && (
-                <label>
+                <label className={labelClassName}>
                   Pagination Navigation
                   <select
+                    className={inputClassName}
                     value={rule.navigationMode ?? 'url-attribute'}
                     onChange={(event) => updateExtractionRule(rule.id, { navigationMode: event.target.value as 'url-attribute' | 'click' | 'url-pattern' })}
                   >
@@ -254,11 +268,11 @@ export function ProfileEditorForm({ mode, draft, onChange, onSave, onCancel }: P
                 </label>
               )}
 
-
               {rule.type === 'pagination' && (
-                <label>
+                <label className={labelClassName}>
                   Wait After Navigation (seconds)
                   <input
+                    className={inputClassName}
                     type="number"
                     min={0}
                     step={0.1}
@@ -276,20 +290,21 @@ export function ProfileEditorForm({ mode, draft, onChange, onSave, onCancel }: P
           </fieldset>
         ))}
 
-        <fieldset style={{ border: '1px solid #ddd', padding: '0.75rem' }}>
-          <legend>Optional Extraction Rules</legend>
-          <p style={{ marginTop: 0, fontSize: '0.8rem', color: '#475569' }}>
+        <fieldset className={fieldsetClassName}>
+          <legend className="px-1 text-sm font-semibold text-slate-800">Optional Extraction Rules</legend>
+          <p className="text-xs text-slate-600">
             EPUB note: selecting <code>series</code> maps to OPF collection metadata.
           </p>
-          <div style={{ display: 'grid', gap: '0.75rem' }}>
+          <div className="grid gap-3">
             {addableRules.map((rule) => (
-              <div key={rule.id} style={{ border: '1px solid #eee', padding: '0.5rem' }}>
-                <div style={{ display: 'grid', gap: '0.5rem' }}>
+              <div key={rule.id} className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                <div className="grid gap-2">
                   {rule.type === 'pre-extraction' && (
                     <>
-                      <label>
+                      <label className={labelClassName}>
                         Action
                         <select
+                          className={inputClassName}
                           value={rule.action ?? 'click'}
                           onChange={(event) => updateExtractionRule(rule.id, { action: event.target.value as 'click' })}
                         >
@@ -297,9 +312,10 @@ export function ProfileEditorForm({ mode, draft, onChange, onSave, onCancel }: P
                         </select>
                       </label>
 
-                      <label>
+                      <label className={labelClassName}>
                         Selector Type
                         <select
+                          className={inputClassName}
                           value={rule.selectorType}
                           onChange={(event) => updateExtractionRule(rule.id, { selectorType: event.target.value as SelectorType })}
                         >
@@ -308,18 +324,19 @@ export function ProfileEditorForm({ mode, draft, onChange, onSave, onCancel }: P
                         </select>
                       </label>
 
-                      <label>
+                      <label className={labelClassName}>
                         Selector
                         <input
+                          className={inputClassName}
                           value={rule.selector}
                           onChange={(event) => updateExtractionRule(rule.id, { selector: event.target.value })}
-                          style={{ width: '100%' }}
                         />
                       </label>
 
-                      <label>
+                      <label className={labelClassName}>
                         Timeout (ms)
                         <input
+                          className={inputClassName}
                           type="number"
                           min={0}
                           step={100}
@@ -335,94 +352,98 @@ export function ProfileEditorForm({ mode, draft, onChange, onSave, onCancel }: P
 
                   {rule.type === 'metadata' && (
                     <>
-                  <label>
-                    Field Type
-                    <select
-                      value={rule.fieldType}
-                      onChange={(event) => updateExtractionRule(rule.id, { fieldType: event.target.value as MetadataFieldType })}
-                    >
-                      <option value="title">Title</option>
-                      <option value="author">Author</option>
-                      <option value="volume">Volume</option>
-                      <option value="chapter">Chapter (legacy)</option>
-                      <option value="publisher">Publisher</option>
-                      <option value="series">Series</option>
-                      <option value="subject">Subject</option>
-                      <option value="cover">Cover</option>
-                      <option value="language">Language</option>
-                      <option value="description">Description</option>
-                      <option value="other">Other</option>
-                    </select>
-                  </label>
+                      <label className={labelClassName}>
+                        Field Type
+                        <select
+                          className={inputClassName}
+                          value={rule.fieldType}
+                          onChange={(event) => updateExtractionRule(rule.id, { fieldType: event.target.value as MetadataFieldType })}
+                        >
+                          <option value="title">Title</option>
+                          <option value="author">Author</option>
+                          <option value="volume">Volume</option>
+                          <option value="chapter">Chapter (legacy)</option>
+                          <option value="publisher">Publisher</option>
+                          <option value="series">Series</option>
+                          <option value="subject">Subject</option>
+                          <option value="cover">Cover</option>
+                          <option value="language">Language</option>
+                          <option value="description">Description</option>
+                          <option value="other">Other</option>
+                        </select>
+                      </label>
 
-                  {rule.fieldType === 'other' && (
-                    <label>
-                      Custom Field Name
-                      <input
-                        value={rule.customFieldName}
-                        onChange={(event) => updateExtractionRule(rule.id, { customFieldName: event.target.value })}
-                        style={{ width: '100%' }}
-                      />
-                    </label>
-                  )}
+                      {rule.fieldType === 'other' && (
+                        <label className={labelClassName}>
+                          Custom Field Name
+                          <input
+                            className={inputClassName}
+                            value={rule.customFieldName}
+                            onChange={(event) => updateExtractionRule(rule.id, { customFieldName: event.target.value })}
+                          />
+                        </label>
+                      )}
 
-                  <label>
-                    Selector Type
-                    <select
-                      value={rule.selectorType}
-                      onChange={(event) => updateExtractionRule(rule.id, { selectorType: event.target.value as SelectorType })}
-                    >
-                      <option value="css">CSS</option>
-                      <option value="xpath">XPath</option>
-                    </select>
-                  </label>
+                      <label className={labelClassName}>
+                        Selector Type
+                        <select
+                          className={inputClassName}
+                          value={rule.selectorType}
+                          onChange={(event) => updateExtractionRule(rule.id, { selectorType: event.target.value as SelectorType })}
+                        >
+                          <option value="css">CSS</option>
+                          <option value="xpath">XPath</option>
+                        </select>
+                      </label>
 
-                  <label>
-                    Selector
-                    <input
-                      value={rule.selector}
-                      onChange={(event) => updateExtractionRule(rule.id, { selector: event.target.value })}
-                      style={{ width: '100%' }}
-                    />
-                  </label>
+                      <label className={labelClassName}>
+                        Selector
+                        <input
+                          className={inputClassName}
+                          value={rule.selector}
+                          onChange={(event) => updateExtractionRule(rule.id, { selector: event.target.value })}
+                        />
+                      </label>
 
-                  <label>
-                    Extract Mode
-                    <select
-                      value={rule.extractMode}
-                      onChange={(event) => updateExtractionRule(rule.id, { extractMode: event.target.value as ExtractMode })}
-                    >
-                      <option value="text">Text</option>
-                      <option value="html">HTML</option>
-                      <option value="attribute">Attribute</option>
-                    </select>
-                  </label>
+                      <label className={labelClassName}>
+                        Extract Mode
+                        <select
+                          className={inputClassName}
+                          value={rule.extractMode}
+                          onChange={(event) => updateExtractionRule(rule.id, { extractMode: event.target.value as ExtractMode })}
+                        >
+                          <option value="text">Text</option>
+                          <option value="html">HTML</option>
+                          <option value="attribute">Attribute</option>
+                        </select>
+                      </label>
 
-                  <label>
-                    Attribute Name
-                    <input
-                      value={rule.attributeName}
-                      onChange={(event) => updateExtractionRule(rule.id, { attributeName: event.target.value })}
-                      style={{ width: '100%' }}
-                    />
-                  </label>
+                      <label className={labelClassName}>
+                        Attribute Name
+                        <input
+                          className={inputClassName}
+                          value={rule.attributeName}
+                          onChange={(event) => updateExtractionRule(rule.id, { attributeName: event.target.value })}
+                        />
+                      </label>
 
-                  <label>
-                    Attribute URL Handling
-                    <select
-                      value={rule.attributeUrlMode}
-                      onChange={(event) => updateExtractionRule(rule.id, { attributeUrlMode: event.target.value as AttributeUrlMode })}
-                      disabled={rule.extractMode !== 'attribute'}
-                    >
-                      <option value="value">Keep URL/value</option>
-                      <option value="fetch-image-data-url">Fetch image and store as data URL</option>
-                    </select>
-                  </label>
+                      <label className={labelClassName}>
+                        Attribute URL Handling
+                        <select
+                          className={inputClassName}
+                          value={rule.attributeUrlMode}
+                          onChange={(event) => updateExtractionRule(rule.id, { attributeUrlMode: event.target.value as AttributeUrlMode })}
+                          disabled={rule.extractMode !== 'attribute'}
+                        >
+                          <option value="value">Keep URL/value</option>
+                          <option value="fetch-image-data-url">Fetch image and store as data URL</option>
+                        </select>
+                      </label>
                     </>
                   )}
 
                   <div>
-                    <button type="button" onClick={() => removeRule(rule.id)}>
+                    <button className={buttonClassName} type="button" onClick={() => removeRule(rule.id)}>
                       Remove Extraction Rule
                     </button>
                   </div>
@@ -430,50 +451,54 @@ export function ProfileEditorForm({ mode, draft, onChange, onSave, onCancel }: P
               </div>
             ))}
 
-            <div>
-              <button type="button" onClick={addMetadataRule}>
+            <div className="flex flex-wrap gap-2">
+              <button className={buttonClassName} type="button" onClick={addMetadataRule}>
                 Add Metadata Rule
               </button>
-              <button type="button" onClick={addPreExtractionRule} style={{ marginLeft: '0.5rem' }}>
+              <button className={buttonClassName} type="button" onClick={addPreExtractionRule}>
                 Add Pre-extraction Action
               </button>
             </div>
           </div>
         </fieldset>
 
-        <fieldset style={{ border: '1px solid #ddd', padding: '0.75rem' }}>
-          <legend>Crawl Limits</legend>
-          <div style={{ display: 'grid', gap: '0.5rem' }}>
-            <label>
+        <fieldset className={fieldsetClassName}>
+          <legend className="px-1 text-sm font-semibold text-slate-800">Crawl Limits</legend>
+          <div className="grid gap-2">
+            <label className={labelClassName}>
               Max Pages
               <input
+                className={inputClassName}
                 type="number"
                 min={1}
                 value={draft.maxPages}
                 onChange={(event) => onChange('maxPages', Number.parseInt(event.target.value, 10) || 1)}
               />
             </label>
-            <label>
+            <label className={labelClassName}>
               Pre-extraction max failures before skipping
               <input
+                className={inputClassName}
                 type="number"
                 min={1}
                 value={draft.preExtractionMaxFailures}
                 onChange={(event) => onChange('preExtractionMaxFailures', Math.max(1, Number.parseInt(event.target.value, 10) || 1))}
               />
             </label>
-            <label>
+            <label className={labelClassName}>
               Multi-job wait min (seconds)
               <input
+                className={inputClassName}
                 type="number"
                 min={0}
                 value={draft.multiJobWaitMinSeconds}
                 onChange={(event) => onChange('multiJobWaitMinSeconds', Math.max(0, Number.parseFloat(event.target.value) || 0))}
               />
             </label>
-            <label>
+            <label className={labelClassName}>
               Multi-job wait max (seconds)
               <input
+                className={inputClassName}
                 type="number"
                 min={0}
                 value={draft.multiJobWaitMaxSeconds}
@@ -483,37 +508,42 @@ export function ProfileEditorForm({ mode, draft, onChange, onSave, onCancel }: P
           </div>
         </fieldset>
 
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button type="button" onClick={onSave}>
+        <div className="flex flex-wrap gap-2">
+          <button className={`${buttonClassName} border-transparent bg-slate-900 text-white hover:bg-slate-800`} type="button" onClick={onSave}>
             {mode === 'create' ? 'Create Profile' : 'Save Profile Changes'}
           </button>
-          <button type="button" onClick={onCancel}>
+          <button className={buttonClassName} type="button" onClick={onCancel}>
             Back to Profile List
           </button>
         </div>
       </div>
 
-      <fieldset style={{ border: '1px solid #ddd', padding: '0.75rem', marginBottom: '1rem' }}>
-        <legend>Selector Test (sample HTML)</legend>
-        <p style={{ marginTop: 0 }}>Paste sample page HTML to test all configured extraction rules.</p>
+      <fieldset className={`${fieldsetClassName} max-w-4xl`}>
+        <legend className="px-1 text-sm font-semibold text-slate-800">Selector Test (sample HTML)</legend>
+        <p className="text-sm text-slate-600">Paste sample page HTML to test all configured extraction rules.</p>
         <textarea
+          className="mt-1 min-h-36 w-full rounded-md border border-slate-300 bg-slate-950/95 px-3 py-2 font-mono text-xs text-slate-100 shadow-sm focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-300"
           value={sampleHtml}
           onChange={(event) => setSampleHtml(event.target.value)}
-          style={{ width: '100%', minHeight: '140px', fontFamily: 'monospace' }}
           placeholder="<html>...</html>"
         />
-        <div style={{ marginTop: '0.5rem' }}>
-          <button type="button" onClick={handleRunSelectorTest}>
+        <div className="mt-2 flex flex-wrap gap-2">
+          <button className={buttonClassName} type="button" onClick={handleRunSelectorTest}>
             Run Selector Test
           </button>
-          <button type="button" onClick={() => { setSampleHtml(''); setTestOutput(''); }} style={{ marginLeft: '0.5rem' }}>
+          <button
+            className={buttonClassName}
+            type="button"
+            onClick={() => {
+              setSampleHtml('');
+              setTestOutput('');
+            }}
+          >
             Clear Test
           </button>
         </div>
         {testOutput && (
-          <pre style={{ whiteSpace: 'pre-wrap', background: '#f7f7f7', padding: '0.5rem', marginTop: '0.75rem' }}>
-            {testOutput}
-          </pre>
+          <pre className="mt-3 whitespace-pre-wrap rounded-md bg-slate-100 p-3 text-xs text-slate-800">{testOutput}</pre>
         )}
       </fieldset>
     </section>
