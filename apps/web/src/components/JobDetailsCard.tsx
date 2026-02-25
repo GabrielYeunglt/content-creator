@@ -78,7 +78,7 @@ export function JobDetailsCard({
       </div>
 
       <div className="mt-3 flex flex-wrap gap-2">
-        {job.status === 'running' && !isExporting && (
+        {job.status === 'running' && (
           <button type="button" onClick={() => onStopCrawl?.(job)} className="rounded bg-rose-700 px-2 py-1 text-xs text-white">
             Stop crawl
           </button>
