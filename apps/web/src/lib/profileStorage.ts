@@ -32,6 +32,13 @@ function normalizeMetadataFieldType(fieldType: string | undefined): 'title' | 'a
   return 'title';
 }
 
+
+function normalizePreExtractionRunMode(
+  runMode: string | undefined
+): 'every-page' | 'start-of-job' {
+  return runMode === 'start-of-job' ? 'start-of-job' : 'every-page';
+}
+
 function normalizeMetadataOverrides(overrides: Record<string, string> | undefined): Record<string, string> {
   if (!overrides) {
     return {};
@@ -104,6 +111,7 @@ function sanitizeProfile(candidate: Partial<WebsiteProfile>): WebsiteProfile | n
         selectorType: validSelectorType(rule.selectorType) ? rule.selectorType : 'css',
         selector: rule.selector.trim(),
         action: 'click' as const,
+        runMode: normalizePreExtractionRunMode(rule.runMode),
         timeoutMs: Math.max(0, Number(rule.timeoutMs) || 5000)
       })),
     preExtractionMaxFailures: Math.max(1, Number(candidate.preExtractionMaxFailures) || 3),
@@ -221,6 +229,7 @@ function buildProfile(draft: ProfileDraft, id: string, createdAt: string): Websi
         selectorType: rule.selectorType,
         selector: rule.selector.trim(),
         action: 'click' as const,
+        runMode: normalizePreExtractionRunMode(rule.runMode),
         timeoutMs: Math.max(0, Number(rule.timeoutMs) || 5000)
       })),
     preExtractionMaxFailures: Math.max(1, Number(draft.preExtractionMaxFailures) || 3),
@@ -313,6 +322,7 @@ export function profileToDraft(profile: WebsiteProfile): ProfileDraft {
         selectorType: rule.selectorType,
         selector: rule.selector,
         action: rule.action,
+        runMode: normalizePreExtractionRunMode(rule.runMode),
         timeoutMs: Math.max(0, Number(rule.timeoutMs) || 5000)
       }))
     ],

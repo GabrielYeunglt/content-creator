@@ -51,6 +51,7 @@ export type PreExtractionRule = {
   selectorType: SelectorType;
   selector: string;
   action: 'click';
+  runMode?: 'every-page' | 'start-of-job';
   timeoutMs?: number;
 };
 
@@ -104,6 +105,7 @@ export type ExtractionRuleDraft = {
   navigationMode?: 'url-attribute' | 'click' | 'url-pattern';
   postNavigationDelaySeconds?: number;
   action?: 'click';
+  runMode?: 'every-page' | 'start-of-job';
   timeoutMs?: number;
 };
 
@@ -195,6 +197,7 @@ export function createPreExtractionRule(): ExtractionRuleDraft {
     attributeName: 'href',
     attributeUrlMode: 'value',
     action: 'click',
+    runMode: 'every-page',
     timeoutMs: 5000
   };
 }

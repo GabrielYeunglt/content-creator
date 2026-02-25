@@ -334,6 +334,18 @@ export function ProfileEditorForm({ mode, draft, onChange, onSave, onCancel }: P
                       </label>
 
                       <label className={labelClassName}>
+                        Run Action
+                        <select
+                          className={inputClassName}
+                          value={rule.runMode ?? 'every-page'}
+                          onChange={(event) => updateExtractionRule(rule.id, { runMode: event.target.value as 'every-page' | 'start-of-job' })}
+                        >
+                          <option value="every-page">On every crawled page</option>
+                          <option value="start-of-job">Only at crawl start (after base URL navigation)</option>
+                        </select>
+                      </label>
+
+                      <label className={labelClassName}>
                         Timeout (ms)
                         <input
                           className={inputClassName}

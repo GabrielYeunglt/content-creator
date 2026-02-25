@@ -60,6 +60,7 @@ export type CrawlPreExtractionRule = {
   selectorType: SelectorType;
   selector: string;
   action: 'click';
+  runMode?: 'every-page' | 'start-of-job';
   timeoutMs?: number;
 };
 
@@ -679,9 +680,17 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
               }
             }
 
+            const activePreExtractionRules = preExtractionRules.filter((rule) => {
+              if (rule.runMode === 'start-of-job') {
+                return pages.length === 0;
+              }
+
+              return true;
+            });
+
             await runPreExtractionActions({
               page,
-              rules: preExtractionRules,
+              rules: activePreExtractionRules,
               maxFailures: Math.max(1, Number(preExtractionMaxFailures) || 3),
               notes,
               currentUrl

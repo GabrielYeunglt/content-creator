@@ -26,6 +26,7 @@ declare global {
         selectorType: 'css' | 'xpath';
         selector: string;
         action: 'click';
+        runMode?: 'every-page' | 'start-of-job';
         timeoutMs?: number;
       }>;
       preExtractionMaxFailures?: number;

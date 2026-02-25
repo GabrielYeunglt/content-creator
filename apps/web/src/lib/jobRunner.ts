@@ -45,6 +45,7 @@ type VirtualBrowserCrawlRequest = {
     selectorType: 'css' | 'xpath';
     selector: string;
     action: 'click';
+    runMode?: 'every-page' | 'start-of-job';
     timeoutMs?: number;
   }>;
   preExtractionMaxFailures?: number;
@@ -311,6 +312,7 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
             selectorType: rule.selectorType,
             selector: rule.selector,
             action: rule.action,
+            runMode: rule.runMode,
             timeoutMs: rule.timeoutMs
           })),
           preExtractionMaxFailures: Math.max(1, Number(profile.preExtractionMaxFailures) || 3),
