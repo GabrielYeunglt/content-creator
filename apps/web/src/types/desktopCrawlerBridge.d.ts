@@ -22,6 +22,13 @@ declare global {
         attributeName?: string;
         attributeUrlMode?: 'value' | 'fetch-image-data-url';
       }>;
+      preExtractionRules?: Array<{
+        selectorType: 'css' | 'xpath';
+        selector: string;
+        action: 'click';
+        timeoutMs?: number;
+      }>;
+      preExtractionMaxFailures?: number;
       paginationRule: {
         selectorType: 'css' | 'xpath';
         selector: string;

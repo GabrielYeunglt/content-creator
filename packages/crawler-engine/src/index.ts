@@ -56,6 +56,13 @@ export type CrawlInteractionStep = {
   timeoutMs?: number;
 };
 
+export type CrawlPreExtractionRule = {
+  selectorType: SelectorType;
+  selector: string;
+  action: 'click';
+  timeoutMs?: number;
+};
+
 export type VirtualBrowserCrawlOptions = {
   jobId?: string;
   startUrl: string;
@@ -70,6 +77,8 @@ export type VirtualBrowserCrawlOptions = {
     timeoutMs?: number;
   };
   interactionSteps?: CrawlInteractionStep[];
+  preExtractionRules?: CrawlPreExtractionRule[];
+  preExtractionMaxFailures?: number;
   metadataRules?: CrawlMetadataRule[];
   totalPagesRule?: CrawlTotalPagesRule;
   onPageCrawled?: (payload: {
@@ -421,6 +430,44 @@ async function resolveNextUrl(params: {
   return toAbsoluteUrl(currentUrl, `#p=${selectedViaDropdown}`);
 }
 
+async function runPreExtractionActions(params: {
+  page: PlaywrightPageLike;
+  rules: CrawlPreExtractionRule[];
+  maxFailures: number;
+  notes: string[];
+  currentUrl: string;
+}): Promise<void> {
+  const { page, rules, maxFailures, notes, currentUrl } = params;
+
+  if (!rules.length) {
+    return;
+  }
+
+  let failures = 0;
+
+  for (const rule of rules) {
+    if (failures >= maxFailures) {
+      notes.push(`Pre-extraction action failures reached limit (${maxFailures}) at ${currentUrl}; proceeding with extraction.`);
+      return;
+    }
+
+    const selector = toCssSelector(rule.selectorType, rule.selector);
+    const timeout = rule.timeoutMs ?? 5000;
+    try {
+      await page.waitForSelector(selector, { timeout, state: 'attached' });
+      await page.click(selector, { timeout });
+      await page.waitForTimeout(300);
+    } catch (error) {
+      failures += 1;
+      const message = error instanceof Error ? error.message : 'Unknown pre-extraction action error';
+      notes.push(
+        `Pre-extraction action failed at ${currentUrl} selector=${JSON.stringify(rule.selector)} attempt=${failures}/${maxFailures}: ${message}`
+      );
+      console.log(`[crawl] pre-extraction action failed url=${currentUrl} selector=${rule.selector} failures=${failures}/${maxFailures} error=${message}`);
+    }
+  }
+}
+
 
 
 async function extractTotalPages(page: PlaywrightPageLike, rule: CrawlTotalPagesRule): Promise<number | null> {
@@ -533,6 +580,8 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
     timeoutMs = 30000,
     contentReadySelector,
     interactionSteps = [],
+    preExtractionRules = [],
+    preExtractionMaxFailures = 3,
     metadataRules = [],
     totalPagesRule,
     onPageCrawled,
@@ -629,6 +678,14 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
                 await page.waitForTimeout(300);
               }
             }
+
+            await runPreExtractionActions({
+              page,
+              rules: preExtractionRules,
+              maxFailures: Math.max(1, Number(preExtractionMaxFailures) || 3),
+              notes,
+              currentUrl
+            });
 
             if (contentReadySelector) {
               const readiness = await waitForContentReady({

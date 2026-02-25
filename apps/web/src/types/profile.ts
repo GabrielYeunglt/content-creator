@@ -46,6 +46,14 @@ export type TotalPagesRule = {
   attributeName?: string;
 };
 
+export type PreExtractionRule = {
+  id: string;
+  selectorType: SelectorType;
+  selector: string;
+  action: 'click';
+  timeoutMs?: number;
+};
+
 export type WebsiteProfile = {
   id: string;
   name: string;
@@ -64,6 +72,8 @@ export type WebsiteProfile = {
   }>;
   paginationRule: PaginationRule;
   totalPagesRule?: TotalPagesRule;
+  preExtractionRules?: PreExtractionRule[];
+  preExtractionMaxFailures?: number;
   stopRules: StopRules;
   multiJobWaitSecondsRange?: {
     min: number;
@@ -74,7 +84,7 @@ export type WebsiteProfile = {
   updatedAt: string;
 };
 
-export type ExtractionRuleType = 'content' | 'metadata' | 'pagination' | 'total-pages';
+export type ExtractionRuleType = 'content' | 'metadata' | 'pagination' | 'total-pages' | 'pre-extraction';
 
 export type ExtractionRuleDraft = {
   id: string;
@@ -93,6 +103,8 @@ export type ExtractionRuleDraft = {
   customFieldName?: string;
   navigationMode?: 'url-attribute' | 'click' | 'url-pattern';
   postNavigationDelaySeconds?: number;
+  action?: 'click';
+  timeoutMs?: number;
 };
 
 export const defaultSelectorRule: SelectorRule = {
@@ -170,6 +182,23 @@ export function createMetadataExtractionRule(): ExtractionRuleDraft {
   };
 }
 
+export function createPreExtractionRule(): ExtractionRuleDraft {
+  return {
+    id: crypto.randomUUID(),
+    type: 'pre-extraction',
+    label: 'Pre-extraction Action',
+    showByDefault: false,
+    optional: true,
+    selectorType: 'css',
+    selector: '',
+    extractMode: 'text',
+    attributeName: 'href',
+    attributeUrlMode: 'value',
+    action: 'click',
+    timeoutMs: 5000
+  };
+}
+
 export function createDefaultExtractionRules(): ExtractionRuleDraft[] {
   return [createContentRule(), createPaginationRule(), createTotalPagesRule()];
 }
@@ -181,6 +210,7 @@ export type ProfileDraft = {
   extractionRules: ExtractionRuleDraft[];
   multiUrlOverrides: Partial<Record<MetadataFieldType | 'other', string>>;
   maxPages: number;
+  preExtractionMaxFailures: number;
   multiJobWaitMinSeconds: number;
   multiJobWaitMaxSeconds: number;
 };
@@ -193,6 +223,7 @@ export function createDefaultProfileDraft(): ProfileDraft {
     extractionRules: createDefaultExtractionRules(),
     multiUrlOverrides: {},
     maxPages: 100,
+    preExtractionMaxFailures: 3,
     multiJobWaitMinSeconds: 0,
     multiJobWaitMaxSeconds: 0
   };
