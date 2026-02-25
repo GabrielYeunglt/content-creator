@@ -37,7 +37,20 @@ export type ExportPipelineOptions = {
   outputEpubPath?: string;
   outputEpubManifestPath?: string;
   exportLayout?: ExportLayout;
+  abortSignal?: AbortSignal;
 };
+
+class ExportCancelledError extends Error {
+  constructor() {
+    super('Export cancelled by user request.');
+  }
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) {
+    throw new ExportCancelledError();
+  }
+}
 
 const defaultExportLayout: ExportLayout = {
   disableTableOfContents: false,
@@ -274,28 +287,32 @@ export function renderEpubLikeManifest(document: CanonicalDocument): string {
 }
 
 export async function runExportPipeline(options: ExportPipelineOptions): Promise<ExportArtifact[]> {
-  const { document, outputHtmlPath, outputPdfPath, outputEpubPath, outputEpubManifestPath, exportLayout } = options;
+  const { document, outputHtmlPath, outputPdfPath, outputEpubPath, outputEpubManifestPath, exportLayout, abortSignal } = options;
 
   const artifacts: ExportArtifact[] = [];
 
   if (outputHtmlPath) {
+    throwIfAborted(abortSignal);
     const html = renderCanonicalHtml(document, exportLayout);
     await writeTextFile(outputHtmlPath, html);
     artifacts.push({ format: 'html', path: outputHtmlPath });
   }
 
   if (outputPdfPath) {
+    throwIfAborted(abortSignal);
     await renderPdfFromCanonicalDocument({ document, outputPdfPath, exportLayout });
     artifacts.push({ format: 'pdf', path: outputPdfPath });
   }
 
   if (outputEpubManifestPath) {
+    throwIfAborted(abortSignal);
     const manifest = renderEpubLikeManifest(document);
     await writeTextFile(outputEpubManifestPath, manifest);
     artifacts.push({ format: 'epub-manifest', path: outputEpubManifestPath });
   }
 
   if (outputEpubPath) {
+    throwIfAborted(abortSignal);
     await renderEpubFromCanonicalDocument({ document, outputEpubPath, exportLayout });
     artifacts.push({ format: 'epub', path: outputEpubPath });
   }
@@ -400,7 +417,7 @@ async function renderEpubFromCanonicalDocument(params: {
         description: bookDescription,
         language: bookLanguage,
         appendChapterTitles: false,
-        customOpfTemplate: buildCustomOpfTemplate({ series: bookSeries }),
+        customOpfTemplate: buildCustomOpfTemplate({ series: bookSeries, subject: getMetadataValue(document, ['subject']), language: bookLanguage }),
         content
       },
       outputEpubPath
@@ -492,12 +509,23 @@ function getMetadataValue(document: CanonicalDocument, candidates: string[]): st
   return undefined;
 }
 
-function buildCustomOpfTemplate(params: { series?: string }): string | undefined {
-  if (!params.series) {
-    return undefined;
+function buildCustomOpfTemplate(params: { series?: string; subject?: string; language?: string }): string | undefined {
+  const metadataLines: string[] = [];
+
+  if (params.series) {
+    metadataLines.push(`<opf:meta property="belongs-to-collection" id="id-2">${escapeHtml(params.series)}</opf:meta>`);
+    metadataLines.push('<opf:meta refines="#id-2" property="collection-type">series</opf:meta>');
   }
 
-  return `<meta name="calibre:series" content="${escapeHtml(params.series)}"/>`;
+  if (params.subject) {
+    metadataLines.push(`<dc:subject>${escapeHtml(params.subject)}</dc:subject>`);
+  }
+
+  if (params.language) {
+    metadataLines.push(`<dc:language>${escapeHtml(params.language)}</dc:language>`);
+  }
+
+  return metadataLines.length ? metadataLines.join('\n') : undefined;
 }
 
 
@@ -554,13 +582,25 @@ async function prepareEpubContent(
   };
   const { createHash } = await import(/* @vite-ignore */ cryptoModuleName);
 
-  return Promise.all(
-    chapters.map(async (chapter, chapterIndex) => ({
-      title: chapter.title,
-      data: await replaceDataImageUrls(chapter.bodyHtml, assetDir, chapterIndex, createHash, fs, path),
-      excludeFromToc: true
-    }))
-  );
+  const mergedHtml = chapters
+    .map(
+      (chapter) => `
+        <section style="page-break-after: always; break-after: page;">
+          ${chapter.bodyHtml}
+        </section>
+      `
+    )
+    .join('\n');
+
+  const data = await replaceDataImageUrls(mergedHtml, assetDir, 0, createHash, fs, path);
+
+  return [
+    {
+      title: chapters[0]?.title ?? 'Content',
+      data,
+      excludeFromToc: false
+    }
+  ];
 }
 
 async function createEpubAssetDirectory(): Promise<string> {

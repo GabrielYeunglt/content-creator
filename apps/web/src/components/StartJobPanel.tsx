@@ -2,15 +2,40 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { runCrawlJob } from '../lib/jobRunner';
 import { appendJob } from '../lib/jobStorage';
 import { readRuntimeBridgeStatus } from '../lib/runtimeBridgeStatus';
+import { exportJobAllViaDesktop, exportJobAsEpub, exportJobAsHtml, exportJobAsPdf } from '../lib/exportActions';
+import { stopDesktopCrawl, stopDesktopExport } from '../lib/httpDesktopBridge';
+import { appendJobLog, updateJob } from '../lib/jobStorage';
 import type { JobMode, JobProfile } from '../types/jobProfile';
 import type { JobRecord } from '../types/job';
 import type { WebsiteProfile } from '../types/profile';
+import { JobDetailsCard } from './JobDetailsCard';
 
 const CREATE_PROFILE_OPTION_VALUE = '__create_profile__';
+const LAST_JOB_PROFILE_OVERRIDES_KEY = 'content-creator:last-job-profile-overrides:v1';
+
+function readRememberedJobProfileOverrides(): Record<string, string> {
+  try {
+    const raw = window.localStorage.getItem(LAST_JOB_PROFILE_OVERRIDES_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<string, string>;
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeRememberedJobProfileOverrides(value: Record<string, string>): void {
+  window.localStorage.setItem(LAST_JOB_PROFILE_OVERRIDES_KEY, JSON.stringify(value));
+}
+
+function waitMs(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
 
 type StartJobPanelProps = {
   profiles: WebsiteProfile[];
   jobProfiles: JobProfile[];
+  jobs: JobRecord[];
   onJobCreated: (jobs: JobRecord[]) => void;
   onRequestCreateProfile: () => void;
 };
@@ -23,7 +48,7 @@ function hostFromUrl(url: string): string | null {
   }
 }
 
-export function StartJobPanel({ profiles, jobProfiles, onJobCreated, onRequestCreateProfile }: StartJobPanelProps) {
+export function StartJobPanel({ profiles, jobProfiles, jobs, onJobCreated, onRequestCreateProfile }: StartJobPanelProps) {
   const [startUrl, setStartUrl] = useState('');
   const [multiUrlsInput, setMultiUrlsInput] = useState('');
   const [jobMode, setJobMode] = useState<JobMode>('single');
@@ -31,6 +56,8 @@ export function StartJobPanel({ profiles, jobProfiles, onJobCreated, onRequestCr
   const [selectedJobProfileId, setSelectedJobProfileId] = useState('');
   const [message, setMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [exportingJobId, setExportingJobId] = useState<string | null>(null);
+  const [rememberedOverrides, setRememberedOverrides] = useState<Record<string, string>>(() => readRememberedJobProfileOverrides());
 
   const runtimeBridgeStatus = useMemo(() => readRuntimeBridgeStatus(), []);
 
@@ -87,11 +114,73 @@ export function StartJobPanel({ profiles, jobProfiles, onJobCreated, onRequestCr
     [matchingJobProfiles, selectedJobProfileId]
   );
 
+  const currentJob = useMemo(() => {
+    const byRecency = (a: JobRecord, b: JobRecord) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    const running = jobs.filter((job) => job.status === 'running').sort(byRecency)[0];
+    if (running) return running;
+
+    const queued = jobs.filter((job) => job.status === 'queued').sort(byRecency)[0];
+    if (queued) return queued;
+
+    return [...jobs].sort(byRecency)[0] ?? null;
+  }, [jobs]);
+
+  async function runExport(job: JobRecord, action: (value: JobRecord) => Promise<JobRecord[] | null>) {
+    setExportingJobId(job.id);
+    try {
+      const updated = await action(job);
+      if (updated) onJobCreated(updated);
+    } finally {
+      setExportingJobId(null);
+    }
+  }
+
+  async function handleStopCrawl(job: JobRecord): Promise<void> {
+    try {
+      await stopDesktopCrawl(job.id);
+      setIsSubmitting(false);
+      setMessage('Crawl stop requested. You can start a new job now.');
+      onJobCreated(updateJob(job.id, {
+        status: 'cancelled',
+        completedAt: new Date().toISOString(),
+        stopReason: 'cancelled',
+        note: 'Crawl stopped by user.'
+      }));
+      onJobCreated(appendJobLog(job.id, { level: 'warn', message: 'User requested crawl stop.' }));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown stop error';
+      onJobCreated(appendJobLog(job.id, { level: 'error', message: `Failed to stop crawl: ${message}` }));
+    }
+  }
+
+  async function handleStopExport(job: JobRecord): Promise<void> {
+    try {
+      await stopDesktopExport(job.id);
+      setExportingJobId(null);
+      onJobCreated(updateJob(job.id, {
+        note: 'Export stopped by user.'
+      }));
+      onJobCreated(appendJobLog(job.id, { level: 'warn', message: 'User requested export stop.' }));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown stop error';
+      onJobCreated(appendJobLog(job.id, { level: 'error', message: `Failed to stop export: ${message}` }));
+    }
+  }
+
   useEffect(() => {
-    setSelectedJobProfileId((current) => (
-      matchingJobProfiles.some((profile) => profile.id === current) ? current : ''
-    ));
-  }, [matchingJobProfiles]);
+    const rememberedForProfile = rememberedOverrides[selectedProfileId] ?? '';
+    setSelectedJobProfileId((current) => {
+      if (matchingJobProfiles.some((profile) => profile.id === current)) {
+        return current;
+      }
+
+      if (rememberedForProfile && matchingJobProfiles.some((profile) => profile.id === rememberedForProfile)) {
+        return rememberedForProfile;
+      }
+
+      return '';
+    });
+  }, [matchingJobProfiles, rememberedOverrides, selectedProfileId]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -165,19 +254,41 @@ export function StartJobPanel({ profiles, jobProfiles, onJobCreated, onRequestCr
     );
 
     try {
-      await Promise.all(
-        queuedJobIds.map((jobId, index) => runCrawlJob(jobId, {
+      for (let index = 0; index < queuedJobIds.length; index += 1) {
+        const jobId = queuedJobIds[index];
+        await runCrawlJob(jobId, {
           onJobsUpdated: onJobCreated,
           profile: selectedProfile,
           startUrl: urls[index],
           mode: jobMode,
           jobProfile: selectedJobProfile
-        }))
-      );
+        });
+
+        if (jobMode === 'multi' && index < queuedJobIds.length - 1) {
+          const minSeconds = Math.max(0, Number(selectedProfile.multiJobWaitSecondsRange?.min) || 0);
+          const maxSeconds = Math.max(minSeconds, Number(selectedProfile.multiJobWaitSecondsRange?.max) || minSeconds);
+          const waitSeconds = minSeconds + Math.random() * (maxSeconds - minSeconds);
+          if (waitSeconds > 0) {
+            setMessage(`Waiting ${waitSeconds.toFixed(1)}s before next queued crawl job...`);
+            await waitMs(waitSeconds * 1000);
+          }
+        }
+      }
       setMessage('Crawl run finished. Check Results for pages processed, preview, and stop reason.');
     } finally {
       setIsSubmitting(false);
     }
+  }
+
+  function handleJobProfileChange(value: string) {
+    setSelectedJobProfileId(value);
+    if (!selectedProfileId) {
+      return;
+    }
+
+    const next = { ...rememberedOverrides, [selectedProfileId]: value };
+    setRememberedOverrides(next);
+    writeRememberedJobProfileOverrides(next);
   }
 
   function handleProfileSelectionChange(value: string) {
@@ -192,37 +303,43 @@ export function StartJobPanel({ profiles, jobProfiles, onJobCreated, onRequestCr
   const shouldShowCreateOption = Boolean(targetHost) && matchingProfiles.length === 0;
 
   return (
-    <section>
-      <h2>Start Job</h2>
-      <p>Pick a website profile, optionally apply a job profile, then run single or multi URL extraction.</p>
-      <p style={{ color: runtimeBridgeStatus.crawlerBridgeReady ? '#1f7a1f' : '#8a4f00' }}>
-        Crawl runtime bridge: {runtimeBridgeStatus.crawlerBridgeReady ? 'connected' : 'not connected'}.
-      </p>
-      <p style={{ color: runtimeBridgeStatus.exportBridgeReady ? '#1f7a1f' : '#8a4f00' }}>
-        Export runtime bridge: {runtimeBridgeStatus.exportBridgeReady ? 'connected' : 'not connected'}.
-      </p>
+    <section className="space-y-4">
+      <div>
+        <h2 className="text-xl font-semibold text-slate-800">Start Job</h2>
+        <p className="mt-1 text-sm text-slate-600">Pick a website profile, optionally apply a job profile, then run single or multi URL extraction.</p>
+      </div>
+
+      <div className="grid gap-2 text-sm md:grid-cols-2">
+        <p className={`rounded border px-3 py-2 ${runtimeBridgeStatus.crawlerBridgeReady ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-700'}`}>
+          Crawl runtime bridge: <strong>{runtimeBridgeStatus.crawlerBridgeReady ? 'connected' : 'not connected'}</strong>
+        </p>
+        <p className={`rounded border px-3 py-2 ${runtimeBridgeStatus.exportBridgeReady ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-700'}`}>
+          Export runtime bridge: <strong>{runtimeBridgeStatus.exportBridgeReady ? 'connected' : 'not connected'}</strong>
+        </p>
+      </div>
+
       {!runtimeBridgeStatus.crawlerBridgeReady && (
-        <p style={{ color: '#8a4f00' }}>
+        <p className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
           Start Job in this build expects a desktop/backend crawl bridge for Playwright execution. If your setup injects the bridge,
           crawling will run; otherwise this standalone app fails fast.
         </p>
       )}
 
-      <form onSubmit={handleSubmit} style={{ display: 'grid', gap: '0.75rem', maxWidth: '680px' }}>
-        <label>
+      <form onSubmit={handleSubmit} className="grid max-w-3xl gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
+        <label className="text-sm font-medium text-slate-700">
           Job Mode
-          <select value={jobMode} onChange={(event) => setJobMode(event.target.value as JobMode)} style={{ width: '100%' }}>
+          <select value={jobMode} onChange={(event) => setJobMode(event.target.value as JobMode)} className="mt-1 w-full rounded border border-slate-300 bg-white px-2 py-2 text-sm">
             <option value="single">Single URL</option>
             <option value="multi">Multiple URLs</option>
           </select>
         </label>
 
-        <label>
+        <label className="text-sm font-medium text-slate-700">
           Website Profile
           <select
             value={selectedProfileId}
             onChange={(event) => handleProfileSelectionChange(event.target.value)}
-            style={{ width: '100%' }}
+            className="mt-1 w-full rounded border border-slate-300 bg-white px-2 py-2 text-sm"
           >
             {!shouldShowCreateOption && <option value="">Select profile...</option>}
             {matchingProfiles.map((profile) => (
@@ -236,12 +353,12 @@ export function StartJobPanel({ profiles, jobProfiles, onJobCreated, onRequestCr
           </select>
         </label>
 
-        <label>
+        <label className="text-sm font-medium text-slate-700">
           Job Profile Overrides (optional)
           <select
             value={selectedJobProfileId}
-            onChange={(event) => setSelectedJobProfileId(event.target.value)}
-            style={{ width: '100%' }}
+            onChange={(event) => handleJobProfileChange(event.target.value)}
+            className="mt-1 w-full rounded border border-slate-300 bg-white px-2 py-2 text-sm"
             disabled={!selectedProfile}
           >
             <option value="">None</option>
@@ -252,42 +369,62 @@ export function StartJobPanel({ profiles, jobProfiles, onJobCreated, onRequestCr
         </label>
 
         {jobMode === 'multi' ? (
-          <label>
+          <label className="text-sm font-medium text-slate-700">
             Chapter URLs (comma, newline, or ';' separated)
             <textarea
               placeholder={'https://example.com/chapter-1\nhttps://example.com/chapter-2'}
               value={multiUrlsInput}
               onChange={(event) => setMultiUrlsInput(event.target.value)}
-              style={{ width: '100%', minHeight: '120px' }}
+              className="mt-1 min-h-[120px] w-full rounded border border-slate-300 bg-white px-2 py-2 text-sm"
             />
           </label>
         ) : (
-          <label>
+          <label className="text-sm font-medium text-slate-700">
             Starting URL
             <input
               type="url"
               placeholder="https://example.com/content/chapter-1"
               value={startUrl}
               onChange={(event) => setStartUrl(event.target.value)}
-              style={{ width: '100%' }}
+              className="mt-1 w-full rounded border border-slate-300 bg-white px-2 py-2 text-sm"
             />
           </label>
         )}
 
-        <button type="submit" disabled={isSubmitting || profiles.length === 0 || shouldShowCreateOption}>
+        <button
+          type="submit"
+          disabled={isSubmitting || profiles.length === 0 || shouldShowCreateOption}
+          className="rounded bg-blue-700 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-slate-400"
+        >
           {isSubmitting ? 'Running...' : jobMode === 'multi' ? 'Start Multi URL Extraction' : 'Start Crawl Job'}
         </button>
       </form>
 
       {profiles.length === 0 && (
-        <p style={{ color: '#8a4f00' }}>No profiles available. Create one in Profile Manager first.</p>
+        <p className="text-sm text-amber-700">No profiles available. Create one in Profile Manager first.</p>
       )}
       {shouldShowCreateOption && (
-        <p style={{ color: '#8a4f00' }}>
+        <p className="text-sm text-amber-700">
           No profile matches <code>{targetHost}</code>. Choose "Create new profile for this domain...".
         </p>
       )}
-      {message && <p>{message}</p>}
+      {message && <p className="text-sm text-slate-700">{message}</p>}
+
+      {currentJob && (
+        <div className="space-y-2">
+          <h3 className="text-sm font-semibold text-slate-800">Current job snapshot</h3>
+          <JobDetailsCard
+            job={currentJob}
+            isExporting={exportingJobId === currentJob.id}
+            onExportHtml={(job) => void runExport(job, exportJobAsHtml)}
+            onExportPdf={(job) => void runExport(job, exportJobAsPdf)}
+            onExportEpub={(job) => void runExport(job, exportJobAsEpub)}
+            onExportAll={(job) => void runExport(job, exportJobAllViaDesktop)}
+            onStopCrawl={(job) => void handleStopCrawl(job)}
+            onStopExport={(job) => void handleStopExport(job)}
+          />
+        </div>
+      )}
     </section>
   );
 }

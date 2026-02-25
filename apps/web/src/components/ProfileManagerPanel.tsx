@@ -18,7 +18,8 @@ type ProfileManagerPanelProps = {
 type ProfileManagerView =
   | { mode: 'list' }
   | { mode: 'create' }
-  | { mode: 'edit'; profileId: string };
+  | { mode: 'edit'; profileId: string }
+  | { mode: 'details'; profileId: string };
 
 export function ProfileManagerPanel({ onProfilesChanged, createProfileRequestNonce }: ProfileManagerPanelProps) {
   const initialProfiles = useMemo(() => readProfiles(), []);
@@ -52,6 +53,10 @@ export function ProfileManagerPanel({ onProfilesChanged, createProfileRequestNon
     setDraft(createDefaultProfileDraft());
     setView({ mode: 'create' });
     setMessage('');
+  }
+
+  function handleViewDetails(profileId: string) {
+    setView({ mode: 'details', profileId });
   }
 
   function handleEdit(profileId: string) {
@@ -130,10 +135,10 @@ export function ProfileManagerPanel({ onProfilesChanged, createProfileRequestNon
 
   return (
     <section>
-      <h2>Profile Manager</h2>
-      <p>Create profile rules by domain with manual CSS/XPath selectors (v1).</p>
+      <h2 className="text-xl font-semibold text-slate-800">Profile Manager</h2>
+      <p className="mt-1 text-sm text-slate-600">Create profile rules by domain with manual CSS/XPath selectors (v1).</p>
 
-      {message && <p>{message}</p>}
+      {message && <p className="mt-2 text-sm text-slate-700">{message}</p>}
 
       {view.mode === 'list' && (
         <ProfileList
@@ -141,6 +146,7 @@ export function ProfileManagerPanel({ onProfilesChanged, createProfileRequestNon
           onCreateNew={handleCreateNew}
           onEdit={handleEdit}
           onDelete={handleDelete}
+          onViewDetails={handleViewDetails}
         />
       )}
 
@@ -153,6 +159,32 @@ export function ProfileManagerPanel({ onProfilesChanged, createProfileRequestNon
           onCancel={handleBackToList}
         />
       )}
+
+
+      {view.mode === 'details' && (() => {
+        const target = profiles.find((profile) => profile.id === view.profileId);
+        if (!target) {
+          return <p className="mt-3 text-sm text-rose-700">Profile not found.</p>;
+        }
+
+        return (
+          <div className="mt-3 space-y-3 rounded-lg border border-slate-200 bg-white p-4">
+            <button type="button" onClick={handleBackToList} className="rounded border border-slate-300 bg-white px-3 py-1 text-xs hover:bg-slate-100">← Back to table</button>
+            <div className="grid gap-1 text-sm text-slate-700">
+              <p><strong>Name:</strong> {target.name}</p>
+              <p><strong>Domain:</strong> {target.domain}</p>
+              <p><strong>Mode:</strong> {target.profileType ?? 'single-url'}</p>
+              <p><strong>Content selector:</strong> <code>{target.selectorRules[0]?.selector}</code></p>
+              <p><strong>Pagination:</strong> <code>{target.paginationRule.selector}</code></p>
+              <p><strong>Wait range:</strong> {target.multiJobWaitSecondsRange?.min ?? 0}s - {target.multiJobWaitSecondsRange?.max ?? 0}s</p>
+            </div>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => handleEdit(target.id)} className="rounded bg-slate-700 px-3 py-1 text-xs text-white">Edit</button>
+              <button type="button" onClick={() => handleDelete(target.id)} className="rounded bg-rose-700 px-3 py-1 text-xs text-white">Delete</button>
+            </div>
+          </div>
+        );
+      })()}
 
       {view.mode === 'edit' && (
         <ProfileEditorForm

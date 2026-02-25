@@ -3,6 +3,7 @@ export {};
 declare global {
   interface Window {
     __CONTENT_CREATOR_DESKTOP_CRAWLER__?: (request: {
+      jobId?: string;
       startUrl: string;
       domain: string;
       contentRule: {
@@ -13,7 +14,7 @@ declare global {
         attributeUrlMode?: 'value' | 'fetch-image-data-url';
       };
       metadataRules?: Array<{
-        fieldType: 'title' | 'author' | 'chapter' | 'publisher' | 'series' | 'cover' | 'language' | 'description' | 'other';
+        fieldType: 'title' | 'author' | 'volume' | 'chapter' | 'publisher' | 'series' | 'cover' | 'language' | 'description' | 'other';
         customFieldName?: string;
         selectorType: 'css' | 'xpath';
         selector: string;
@@ -42,6 +43,12 @@ declare global {
         selector: string;
         timeoutMs?: number;
       };
+      onPageCrawled?: (payload: {
+        pagesProcessed: number;
+        totalPages?: number;
+        currentUrl?: string;
+        stage?: 'page-crawled' | 'resolving-next-url' | 'next-url-resolved';
+      }) => void;
     }) => Promise<{
       pagesProcessed: number;
       stopReason: string;

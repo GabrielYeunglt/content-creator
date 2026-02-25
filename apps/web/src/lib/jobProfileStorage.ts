@@ -2,6 +2,20 @@ import type { JobProfile, JobProfileDraft } from '../types/jobProfile';
 
 const JOB_PROFILE_STORAGE_KEY = 'content-creator:job-profiles:v1';
 
+function normalizeMetadataOverrides(overrides: Record<string, string> | undefined): Record<string, string> {
+  if (!overrides) {
+    return {};
+  }
+
+  const normalized: Record<string, string> = {};
+  for (const [key, value] of Object.entries(overrides)) {
+    const normalizedKey = key === 'chapter' ? 'volume' : key;
+    normalized[normalizedKey] = value;
+  }
+
+  return normalized;
+}
+
 function sanitizeJobProfile(candidate: Partial<JobProfile>): JobProfile | null {
   if (!candidate.name || !candidate.baseProfileId) {
     return null;
@@ -17,7 +31,7 @@ function sanitizeJobProfile(candidate: Partial<JobProfile>): JobProfile | null {
     maxPagesOverride: typeof candidate.maxPagesOverride === 'number' && candidate.maxPagesOverride > 0
       ? Math.floor(candidate.maxPagesOverride)
       : undefined,
-    metadataOverrides: candidate.metadataOverrides ?? {},
+    metadataOverrides: normalizeMetadataOverrides(candidate.metadataOverrides as Record<string, string> | undefined),
     exportDestination: candidate.exportDestination?.trim() || '',
     exportFileNameTemplate: candidate.exportFileNameTemplate?.trim() || '{{job.id}}-{{date}}',
     createdAt: candidate.createdAt ?? new Date().toISOString(),
@@ -52,7 +66,7 @@ function buildJobProfile(draft: JobProfileDraft, id: string, createdAt: string):
     maxPagesOverride: typeof draft.maxPagesOverride === 'number' && draft.maxPagesOverride > 0
       ? Math.floor(draft.maxPagesOverride)
       : undefined,
-    metadataOverrides: draft.metadataOverrides,
+    metadataOverrides: normalizeMetadataOverrides(draft.metadataOverrides as Record<string, string>),
     exportDestination: draft.exportDestination,
     exportFileNameTemplate: draft.exportFileNameTemplate.trim(),
     createdAt,
@@ -105,7 +119,7 @@ export function jobProfileToDraft(profile: JobProfile): JobProfileDraft {
     paginationSelectorOverride: profile.paginationSelectorOverride ?? '',
     totalPagesSelectorOverride: profile.totalPagesSelectorOverride ?? '',
     maxPagesOverride: profile.maxPagesOverride ?? '',
-    metadataOverrides: profile.metadataOverrides ?? {},
+    metadataOverrides: normalizeMetadataOverrides(profile.metadataOverrides as Record<string, string> | undefined),
     exportDestination: profile.exportDestination ?? '',
     exportFileNameTemplate: profile.exportFileNameTemplate ?? '{{job.id}}-{{date}}'
   };

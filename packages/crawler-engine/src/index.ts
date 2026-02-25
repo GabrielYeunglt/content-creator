@@ -4,7 +4,8 @@ export type CrawlStopReason =
   | 'max-pages-reached'
   | 'error-threshold-reached'
   | 'out-of-domain-blocked'
-  | 'total-pages-reached';
+  | 'total-pages-reached'
+  | 'cancelled';
 
 export type SelectorType = 'css' | 'xpath';
 export type ExtractMode = 'text' | 'html' | 'attribute';
@@ -18,7 +19,7 @@ export type CrawlSelectorRule = {
 };
 
 export type CrawlMetadataRule = {
-  fieldType: 'title' | 'author' | 'chapter' | 'publisher' | 'series' | 'cover' | 'language' | 'description' | 'other';
+  fieldType: 'title' | 'author' | 'volume' | 'chapter' | 'publisher' | 'series' | 'subject' | 'cover' | 'language' | 'description' | 'other';
   customFieldName?: string;
   selectorType: SelectorType;
   selector: string;
@@ -56,6 +57,7 @@ export type CrawlInteractionStep = {
 };
 
 export type VirtualBrowserCrawlOptions = {
+  jobId?: string;
   startUrl: string;
   domain: string;
   contentRule: CrawlSelectorRule;
@@ -70,6 +72,13 @@ export type VirtualBrowserCrawlOptions = {
   interactionSteps?: CrawlInteractionStep[];
   metadataRules?: CrawlMetadataRule[];
   totalPagesRule?: CrawlTotalPagesRule;
+  onPageCrawled?: (payload: {
+    pagesProcessed: number;
+    totalPages?: number;
+    currentUrl?: string;
+    stage?: 'page-crawled' | 'resolving-next-url' | 'next-url-resolved';
+  }) => void;
+  abortSignal?: AbortSignal;
 };
 
 export type CrawledPage = {
@@ -105,9 +114,11 @@ type PlaywrightPageLike = {
   on: (event: 'requestfinished', handler: (request: RequestLike) => void) => void;
   off: (event: 'requestfinished', handler: (request: RequestLike) => void) => void;
   evaluate: <TResult, TArg = undefined>(fn: (arg: TArg) => TResult | Promise<TResult>, arg?: TArg) => Promise<TResult>;
-  waitForSelector: (selector: string, opts: { timeout: number }) => Promise<unknown>;
+  waitForSelector: (selector: string, opts: { timeout: number; state?: 'attached' | 'visible' }) => Promise<unknown>;
   click: (selector: string, opts: { timeout: number }) => Promise<void>;
   waitForTimeout: (timeout: number) => Promise<void>;
+  url: () => string;
+  title: () => Promise<string>;
   context: () => {
     request: {
       get: (url: string, opts?: { headers?: Record<string, string> }) => Promise<{
@@ -119,6 +130,24 @@ type PlaywrightPageLike = {
     };
   };
 };
+
+type SelectorPresenceDiagnostics = {
+  found: boolean;
+  iframeSources: string[];
+  bodyTextSample: string;
+};
+
+class CrawlCancelledError extends Error {
+  constructor() {
+    super('Crawl cancelled by user request.');
+  }
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) {
+    throw new CrawlCancelledError();
+  }
+}
 
 type PlaywrightLike = {
   chromium: {
@@ -237,6 +266,33 @@ async function waitForDifferentRuleValue(params: {
   }
 
   return latestValue;
+}
+
+async function waitForContentReady(params: {
+  page: PlaywrightPageLike;
+  contentReadySelector: NonNullable<VirtualBrowserCrawlOptions['contentReadySelector']>;
+  contentRule: Pick<CrawlSelectorRule, 'selectorType' | 'selector' | 'extractMode' | 'attributeName'>;
+}): Promise<{ usedContentRuleFallback: boolean }> {
+  const { page, contentReadySelector, contentRule } = params;
+  const readySelector = toCssSelector(contentReadySelector.selectorType, contentReadySelector.selector);
+  const waitTimeoutMs = contentReadySelector.timeoutMs ?? 30000;
+
+  try {
+    await page.waitForSelector(readySelector, { timeout: waitTimeoutMs, state: 'attached' });
+    return { usedContentRuleFallback: false };
+  } catch (error) {
+    const extractedValue = await extractRuleValue(page, contentRule);
+    if (extractedValue && extractedValue.trim()) {
+      return { usedContentRuleFallback: true };
+    }
+
+    throw await augmentSelectorTimeoutError(
+      page,
+      contentReadySelector.selectorType,
+      contentReadySelector.selector,
+      error
+    );
+  }
 }
 
 function resolveUrlPatternNext(currentUrl: string): string | null {
@@ -411,9 +467,64 @@ function toCssSelector(selectorType: SelectorType, selector: string): string {
   return `xpath=${selector}`;
 }
 
+async function collectSelectorPresenceDiagnostics(
+  page: PlaywrightPageLike,
+  selectorType: SelectorType,
+  selector: string
+): Promise<SelectorPresenceDiagnostics> {
+  return page.evaluate(
+    ({ selectorType: type, selector: value }) => {
+      let found = false;
+      try {
+        if (type === 'css') {
+          found = document.querySelector(value) !== null;
+        } else {
+          found = document.evaluate(value, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue !== null;
+        }
+      } catch {
+        found = false;
+      }
+
+      const iframeSources = Array.from(document.querySelectorAll('iframe'))
+        .map((iframe) => iframe.getAttribute('src')?.trim() ?? '')
+        .filter((src) => src.length > 0)
+        .slice(0, 5);
+
+      return {
+        found,
+        iframeSources,
+        bodyTextSample: (document.body?.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, 160)
+      };
+    },
+    { selectorType, selector }
+  );
+}
+
+async function augmentSelectorTimeoutError(
+  page: PlaywrightPageLike,
+  selectorType: SelectorType,
+  selector: string,
+  error: unknown
+): Promise<Error> {
+  const baseMessage = error instanceof Error ? error.message : 'Unknown selector wait error';
+
+  try {
+    const [diagnostics, title] = await Promise.all([
+      collectSelectorPresenceDiagnostics(page, selectorType, selector),
+      page.title()
+    ]);
+
+    const message = `${baseMessage} (debug: pageUrl=${page.url()}, pageTitle=${JSON.stringify(title)}, selectorFoundInMainDocument=${diagnostics.found}, iframeCount=${diagnostics.iframeSources.length}, iframeSources=${JSON.stringify(diagnostics.iframeSources)}, bodyTextSample=${JSON.stringify(diagnostics.bodyTextSample)})`;
+    return new Error(message);
+  } catch {
+    return new Error(`${baseMessage} (debug: failed to collect timeout diagnostics)`);
+  }
+}
+
 export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOptions): Promise<CrawlResult> {
   const { chromium } = await loadPlaywright();
   const {
+    jobId,
     startUrl,
     domain,
     contentRule,
@@ -423,7 +534,9 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
     contentReadySelector,
     interactionSteps = [],
     metadataRules = [],
-    totalPagesRule
+    totalPagesRule,
+    onPageCrawled,
+    abortSignal
   } = options;
 
   console.log('Starting crawl with options:', options);
@@ -439,6 +552,7 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
   );
 
   console.log('[crawl] start', {
+    jobId,
     startUrl,
     domain,
     paginationMode: paginationRule.navigationMode ?? 'url-attribute',
@@ -461,6 +575,7 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
 
   try {
     while (currentUrl) {
+      throwIfAborted(abortSignal);
       console.log(`[crawl] loop start currentUrl=${currentUrl} pages=${pages.length}`);
       if (visited.has(currentUrl)) {
         console.log(`[crawl] already-visited-url ${currentUrl}`);
@@ -492,6 +607,7 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
 
       try {
         for (let attempt = 1; attempt <= maxRetriesPerPage + 1; attempt += 1) {
+          throwIfAborted(abortSignal);
           try {
             console.log(`[crawl] navigating to ${currentUrl} attempt=${attempt}`);
             await page.goto(currentUrl, { waitUntil: navigationWaitUntil, timeout: timeoutMs });
@@ -515,8 +631,21 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
             }
 
             if (contentReadySelector) {
-              const readySelector = toCssSelector(contentReadySelector.selectorType, contentReadySelector.selector);
-              await page.waitForSelector(readySelector, { timeout: contentReadySelector.timeoutMs ?? timeoutMs });
+              const readiness = await waitForContentReady({
+                page,
+                contentReadySelector: {
+                  ...contentReadySelector,
+                  timeoutMs: contentReadySelector.timeoutMs ?? timeoutMs
+                },
+                contentRule
+              });
+
+              if (readiness.usedContentRuleFallback) {
+                notes.push(
+                  `Content-ready selector timed out at ${currentUrl}; continuing because content selector extracted a non-empty value.`
+                );
+                console.log(`[crawl] content-ready fallback used at ${currentUrl}`);
+              }
             }
 
             visited.add(currentUrl);
@@ -621,6 +750,13 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
           metadata
         });
 
+        onPageCrawled?.({
+          pagesProcessed: pages.length,
+          totalPages: totalPagesTarget ?? undefined,
+          currentUrl,
+          stage: 'page-crawled'
+        });
+
         console.log(`[crawl] page saved url=${currentUrl} stylesheets=${domAssets.stylesheets.length}+${networkStylesheets.size} scripts=${domAssets.scripts.length}+${networkScripts.size}`);
         previousExtractedValue = extractedValue;
 
@@ -631,6 +767,7 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
           if (extractedTotalPages !== null) {
             totalPagesTarget = extractedTotalPages;
             notes.push(`Total pages target extracted: ${extractedTotalPages}.`);
+            onPageCrawled?.({ pagesProcessed: pages.length, totalPages: totalPagesTarget, currentUrl });
             console.log(`[crawl] total pages target extracted=${extractedTotalPages}`);
           }
         }
@@ -641,6 +778,13 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
           return { pagesProcessed: pages.length, stopReason: 'total-pages-reached', pages, errors, notes };
         }
 
+        onPageCrawled?.({
+          pagesProcessed: pages.length,
+          totalPages: totalPagesTarget ?? undefined,
+          currentUrl,
+          stage: 'resolving-next-url'
+        });
+
         const resolvedNext = await resolveNextUrl({
           page,
           currentUrl,
@@ -648,6 +792,14 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
           timeoutMs
         });
         console.log(`[crawl] resolved next url from ${currentUrl} => ${resolvedNext}`);
+
+        onPageCrawled?.({
+          pagesProcessed: pages.length,
+          totalPages: totalPagesTarget ?? undefined,
+          currentUrl: resolvedNext ?? currentUrl,
+          stage: 'next-url-resolved'
+        });
+
         if (!resolvedNext) {
           console.log(`[crawl] no-next-button at ${currentUrl}`);
           return { pagesProcessed: pages.length, stopReason: 'no-next-button', pages, errors, notes };
@@ -655,6 +807,10 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
 
         currentUrl = resolvedNext;
       } catch (error) {
+        if (error instanceof CrawlCancelledError) {
+          notes.push('Crawl cancelled by user request.');
+          return { pagesProcessed: pages.length, stopReason: 'cancelled', pages, errors, notes };
+        }
         consecutiveErrors += 1;
         const message = error instanceof Error ? error.message : 'Unknown crawl processing error';
 

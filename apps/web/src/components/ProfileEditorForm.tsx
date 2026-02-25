@@ -120,8 +120,11 @@ export function ProfileEditorForm({ mode, draft, onChange, onSave, onCancel }: P
             <p style={{ marginTop: 0 }}>
               If provided, these values override extracted metadata values in multi URL extraction jobs.
             </p>
+            <p style={{ marginTop: 0, fontSize: '0.8rem', color: '#475569' }}>
+              EPUB note: <code>series</code> is exported as <code>{'<opf:meta property="belongs-to-collection" id="id-2">...</opf:meta>'}</code>.
+            </p>
             <div style={{ display: 'grid', gap: '0.5rem' }}>
-              {(['title', 'author', 'chapter', 'publisher', 'series', 'cover', 'language', 'description', 'other'] as const).map((field) => (
+              {(['title', 'author', 'volume', 'publisher', 'series', 'subject', 'cover', 'language', 'description', 'other'] as const).map((field) => (
                 <label key={field}>
                   {field}
                   <input
@@ -270,6 +273,9 @@ export function ProfileEditorForm({ mode, draft, onChange, onSave, onCancel }: P
 
         <fieldset style={{ border: '1px solid #ddd', padding: '0.75rem' }}>
           <legend>Optional Extraction Rules</legend>
+          <p style={{ marginTop: 0, fontSize: '0.8rem', color: '#475569' }}>
+            EPUB note: selecting <code>series</code> maps to OPF collection metadata.
+          </p>
           <div style={{ display: 'grid', gap: '0.75rem' }}>
             {addableRules.map((rule) => (
               <div key={rule.id} style={{ border: '1px solid #eee', padding: '0.5rem' }}>
@@ -282,9 +288,11 @@ export function ProfileEditorForm({ mode, draft, onChange, onSave, onCancel }: P
                     >
                       <option value="title">Title</option>
                       <option value="author">Author</option>
-                      <option value="chapter">Chapter</option>
+                      <option value="volume">Volume</option>
+                      <option value="chapter">Chapter (legacy)</option>
                       <option value="publisher">Publisher</option>
                       <option value="series">Series</option>
+                      <option value="subject">Subject</option>
                       <option value="cover">Cover</option>
                       <option value="language">Language</option>
                       <option value="description">Description</option>
@@ -383,6 +391,24 @@ export function ProfileEditorForm({ mode, draft, onChange, onSave, onCancel }: P
                 min={1}
                 value={draft.maxPages}
                 onChange={(event) => onChange('maxPages', Number.parseInt(event.target.value, 10) || 1)}
+              />
+            </label>
+            <label>
+              Multi-job wait min (seconds)
+              <input
+                type="number"
+                min={0}
+                value={draft.multiJobWaitMinSeconds}
+                onChange={(event) => onChange('multiJobWaitMinSeconds', Math.max(0, Number.parseFloat(event.target.value) || 0))}
+              />
+            </label>
+            <label>
+              Multi-job wait max (seconds)
+              <input
+                type="number"
+                min={0}
+                value={draft.multiJobWaitMaxSeconds}
+                onChange={(event) => onChange('multiJobWaitMaxSeconds', Math.max(0, Number.parseFloat(event.target.value) || 0))}
               />
             </label>
           </div>

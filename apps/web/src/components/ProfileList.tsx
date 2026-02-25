@@ -5,54 +5,42 @@ type ProfileListProps = {
   onCreateNew: () => void;
   onEdit: (profileId: string) => void;
   onDelete: (profileId: string) => void;
+  onViewDetails: (profileId: string) => void;
 };
 
-export function ProfileList({ profiles, onCreateNew, onEdit, onDelete }: ProfileListProps) {
+export function ProfileList({ profiles, onCreateNew, onEdit, onDelete, onViewDetails }: ProfileListProps) {
   return (
-    <section>
-      <h3>Saved Profiles ({profiles.length})</h3>
-      <button type="button" onClick={onCreateNew} style={{ marginBottom: '0.75rem' }}>
-        Create New Profile
-      </button>
+    <section className="space-y-3">
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold text-slate-800">Saved Profiles ({profiles.length})</h3>
+        <button type="button" onClick={onCreateNew} className="rounded bg-blue-700 px-3 py-2 text-sm font-medium text-white hover:bg-blue-800">Create New Profile</button>
+      </div>
 
-      {profiles.length === 0 && <p>No profiles yet.</p>}
-      {profiles.map((profile) => (
-        <article key={profile.id} style={{ border: '1px solid #ddd', padding: '0.75rem', marginBottom: '0.75rem' }}>
-          <p>
-            <strong>{profile.name}</strong> — {profile.domain}
-          </p>
-          <p>
-            Mode: <code>{profile.profileType ?? 'single-url'}</code>
-          </p>
-          <p>
-            Content selector: <code>{profile.selectorRules[0]?.selectorType}</code> <code>{profile.selectorRules[0]?.selector}</code>
-          </p>
-          <p>
-            Next selector: <code>{profile.paginationRule.selectorType}</code> <code>{profile.paginationRule.selector}</code>
-          </p>
-          <p>
-            Next navigation: <code>{profile.paginationRule.navigationMode ?? 'url-attribute'}</code>
-          </p>
-          <p>
-            Post-nav wait: <code>{profile.paginationRule.postNavigationDelaySeconds ?? 0.5}s</code>
-          </p>
-          <p>
-            Total-pages rule: {profile.totalPagesRule?.selector ? <code>{profile.totalPagesRule.selector}</code> : 'not set'}
-          </p>
-          <p>Optional metadata extractions: {profile.metadataRules?.length ?? 0}</p>
-          {profile.profileType === 'multi-url' && (
-            <p>Metadata overrides: {Object.values(profile.multiUrlOverrides ?? {}).filter((value) => Boolean(value?.trim())).length}</p>
-          )}
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <button type="button" onClick={() => onEdit(profile.id)}>
-              Edit
-            </button>
-            <button type="button" onClick={() => onDelete(profile.id)}>
-              Delete
-            </button>
-          </div>
-        </article>
-      ))}
+      {profiles.length === 0 && <p className="text-sm text-slate-500">No profiles yet.</p>}
+      {profiles.length > 0 && (
+        <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+          <table className="table-generic">
+            <thead className="bg-slate-50"><tr><th>Name</th><th>Domain</th><th>Mode</th><th>Selectors</th><th>Actions</th></tr></thead>
+            <tbody>
+              {profiles.map((profile) => (
+                <tr key={profile.id}>
+                  <td className="font-medium text-slate-900">{profile.name}</td>
+                  <td>{profile.domain}</td>
+                  <td>{profile.profileType ?? 'single-url'}</td>
+                  <td>{profile.metadataRules?.length ?? 0} metadata / max {profile.stopRules.maxPages}</td>
+                  <td>
+                    <div className="flex flex-wrap gap-2">
+                      <button type="button" onClick={() => onViewDetails(profile.id)} className="rounded border border-slate-300 bg-white px-2 py-1 text-xs hover:bg-slate-100">View details</button>
+                      <button type="button" onClick={() => onEdit(profile.id)} className="rounded bg-slate-700 px-2 py-1 text-xs text-white">Edit</button>
+                      <button type="button" onClick={() => onDelete(profile.id)} className="rounded bg-rose-700 px-2 py-1 text-xs text-white">Delete</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </section>
   );
 }

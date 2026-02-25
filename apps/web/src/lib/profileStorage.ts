@@ -21,6 +21,30 @@ function validSelectorType(value: string): value is SelectorType {
   return value === 'css' || value === 'xpath';
 }
 
+function normalizeMetadataFieldType(fieldType: string | undefined): 'title' | 'author' | 'volume' | 'chapter' | 'publisher' | 'series' | 'subject' | 'cover' | 'language' | 'description' | 'other' {
+  if (fieldType === 'volume') return 'volume';
+  if (fieldType === 'chapter') return 'volume';
+  if (fieldType === 'title' || fieldType === 'author' || fieldType === 'publisher' || fieldType === 'series' || fieldType === 'subject' || fieldType === 'cover' || fieldType === 'language' || fieldType === 'description' || fieldType === 'other') {
+    return fieldType;
+  }
+
+  return 'title';
+}
+
+function normalizeMetadataOverrides(overrides: Record<string, string> | undefined): Record<string, string> {
+  if (!overrides) {
+    return {};
+  }
+
+  const normalized: Record<string, string> = {};
+  for (const [key, value] of Object.entries(overrides)) {
+    const normalizedKey = key === 'chapter' ? 'volume' : key;
+    normalized[normalizedKey] = value;
+  }
+
+  return normalized;
+}
+
 function sanitizeProfile(candidate: Partial<WebsiteProfile>): WebsiteProfile | null {
   if (!candidate.name || !candidate.domain || !candidate.paginationRule || !candidate.stopRules) {
     return null;
@@ -46,6 +70,7 @@ function sanitizeProfile(candidate: Partial<WebsiteProfile>): WebsiteProfile | n
       .filter((rule) => rule.selector.trim().length > 0)
       .map((rule) => ({
         ...rule,
+        fieldType: normalizeMetadataFieldType(rule.fieldType),
         customFieldName: rule.customFieldName?.trim() || '',
         attributeUrlMode: rule.attributeUrlMode ?? 'value'
       })),
@@ -76,7 +101,11 @@ function sanitizeProfile(candidate: Partial<WebsiteProfile>): WebsiteProfile | n
       stopWhenUrlVisited: Boolean(candidate.stopRules.stopWhenUrlVisited),
       maxPages: Math.max(1, Number(candidate.stopRules.maxPages) || createDefaultProfileDraft().maxPages)
     },
-    multiUrlOverrides: candidate.multiUrlOverrides ?? {},
+    multiJobWaitSecondsRange: {
+      min: Math.max(0, Number(candidate.multiJobWaitSecondsRange?.min) || 0),
+      max: Math.max(0, Number(candidate.multiJobWaitSecondsRange?.max) || 0)
+    },
+    multiUrlOverrides: normalizeMetadataOverrides(candidate.multiUrlOverrides as Record<string, string> | undefined),
     createdAt: candidate.createdAt ?? new Date().toISOString(),
     updatedAt: candidate.updatedAt ?? new Date().toISOString()
   };
@@ -89,6 +118,12 @@ function validateProfileDraft(draft: ProfileDraft): { ok: true } | { ok: false; 
   }
   if (!domain || !domain.includes('.')) {
     return { ok: false, error: 'A valid domain is required (example.com).' };
+  }
+
+  const waitMin = Math.max(0, Number(draft.multiJobWaitMinSeconds) || 0);
+  const waitMax = Math.max(0, Number(draft.multiJobWaitMaxSeconds) || 0);
+  if (waitMin > waitMax) {
+    return { ok: false, error: 'Multi-job wait range min must be less than or equal to max.' };
   }
 
   const invalidRequiredRule = draft.extractionRules.find(
@@ -141,7 +176,7 @@ function buildProfile(draft: ProfileDraft, id: string, createdAt: string): Websi
       .filter((rule) => rule.type === 'metadata' && rule.selector.trim().length > 0)
       .map((rule) => ({
         id: rule.id || crypto.randomUUID(),
-        fieldType: rule.fieldType ?? 'title',
+        fieldType: normalizeMetadataFieldType(rule.fieldType),
         customFieldName: rule.customFieldName?.trim() ?? '',
         selectorType: rule.selectorType,
         selector: rule.selector.trim(),
@@ -168,7 +203,11 @@ function buildProfile(draft: ProfileDraft, id: string, createdAt: string): Websi
       stopWhenUrlVisited: true,
       maxPages: Math.max(1, draft.maxPages)
     },
-    multiUrlOverrides: draft.multiUrlOverrides,
+    multiJobWaitSecondsRange: {
+      min: Math.max(0, Number(draft.multiJobWaitMinSeconds) || 0),
+      max: Math.max(0, Number(draft.multiJobWaitMaxSeconds) || 0)
+    },
+    multiUrlOverrides: normalizeMetadataOverrides(draft.multiUrlOverrides as Record<string, string>),
     createdAt,
     updatedAt: new Date().toISOString()
   };
@@ -224,7 +263,7 @@ export function profileToDraft(profile: WebsiteProfile): ProfileDraft {
         extractMode: rule.extractMode,
         attributeName: rule.attributeName ?? 'href',
         attributeUrlMode: rule.attributeUrlMode ?? 'value',
-        fieldType: rule.fieldType,
+        fieldType: normalizeMetadataFieldType(rule.fieldType),
         customFieldName: rule.customFieldName ?? ''
       })),
       {
@@ -242,8 +281,10 @@ export function profileToDraft(profile: WebsiteProfile): ProfileDraft {
         attributeName: profile.totalPagesRule?.attributeName ?? defaultTotalPages.attributeName
       }
     ],
-    multiUrlOverrides: profile.multiUrlOverrides ?? {},
-    maxPages: profile.stopRules.maxPages
+    multiUrlOverrides: normalizeMetadataOverrides(profile.multiUrlOverrides as Record<string, string> | undefined),
+    maxPages: profile.stopRules.maxPages,
+    multiJobWaitMinSeconds: Math.max(0, Number(profile.multiJobWaitSecondsRange?.min) || 0),
+    multiJobWaitMaxSeconds: Math.max(0, Number(profile.multiJobWaitSecondsRange?.max) || 0)
   };
 }
 
