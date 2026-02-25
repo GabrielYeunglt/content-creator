@@ -29,6 +29,14 @@ async function postJson<TRequest, TResponse>(path: string, payload: TRequest): P
   return (await response.json()) as TResponse;
 }
 
+export async function stopDesktopCrawl(jobId: string): Promise<void> {
+  await postJson('/crawl/stop', { jobId });
+}
+
+export async function stopDesktopExport(jobId: string): Promise<void> {
+  await postJson('/export/stop', { jobId });
+}
+
 async function checkHealth(): Promise<boolean> {
   try {
     const response = await fetch(`${bridgeBaseUrl}/health`, { method: 'GET' });

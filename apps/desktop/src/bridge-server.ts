@@ -60,6 +60,15 @@ async function readCrawlPagesTempFile(fileId: string): Promise<CrawlPageRecord[]
 const port = Number.parseInt(process.env.CONTENT_CREATOR_BRIDGE_PORT ?? '8787', 10);
 const host = process.env.CONTENT_CREATOR_BRIDGE_HOST ?? '127.0.0.1';
 const artifactRoot = resolve(process.env.CONTENT_CREATOR_ARTIFACTS_DIR ?? '.content-creator-artifacts');
+const activeCrawlControllers = new Map<string, AbortController>();
+const activeExportControllers = new Map<string, AbortController>();
+
+function createRequestAbortController(req: IncomingMessage): AbortController {
+  const controller = new AbortController();
+  req.on('close', () => controller.abort());
+  req.on('aborted', () => controller.abort());
+  return controller;
+}
 
 function sendJson(res: ServerResponse, statusCode: number, body: unknown): void {
   res.writeHead(statusCode, {
@@ -148,7 +157,7 @@ function coerceCrawlOptions(value: unknown): VirtualBrowserCrawlOptions {
   return value as VirtualBrowserCrawlOptions;
 }
 
-async function handleExport(request: ExportRequest): Promise<{ artifacts: ExportArtifact[] }> {
+async function handleExport(request: ExportRequest, abortSignal?: AbortSignal): Promise<{ artifacts: ExportArtifact[] }> {
   console.log(
     `[desktop-bridge] preparing export for job=${request.jobId} format=${request.format} pages=${request.pages.length}`
   );
@@ -186,7 +195,8 @@ async function handleExport(request: ExportRequest): Promise<{ artifacts: Export
     outputHtmlPath: paths.htmlPath,
     outputPdfPath: paths.pdfPath,
     outputEpubPath: paths.epubPath,
-    exportLayout: request.exportLayout
+    exportLayout: request.exportLayout,
+    abortSignal
   });
 
   const normalized = artifacts.map((artifact) => ({
@@ -277,8 +287,22 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
 
   if (req.method === 'POST' && req.url === '/crawl') {
     const body = await readJson<unknown>(req);
+    const request = coerceCrawlOptions(body);
+    const jobId = typeof (request as { jobId?: unknown }).jobId === 'string'
+      ? ((request as { jobId?: string }).jobId ?? '').trim()
+      : '';
+    const requestController = createRequestAbortController(req);
+    const stopController = new AbortController();
+    const relayAbort = () => stopController.abort();
+    requestController.signal.addEventListener('abort', relayAbort, { once: true });
+    if (jobId) {
+      activeCrawlControllers.set(jobId, stopController);
+    }
     console.log('[desktop-bridge] running crawl request');
-    const result = await crawlWithVirtualBrowser(coerceCrawlOptions(body));
+    const result = await crawlWithVirtualBrowser({ ...request, abortSignal: stopController.signal });
+    if (jobId) {
+      activeCrawlControllers.delete(jobId);
+    }
     const crawlPagesTempFileId = await writeCrawlPagesTempFile(result.pages as CrawlPageRecord[]);
     console.log(
       `[desktop-bridge] crawl completed pages=${result.pages.length} errors=${result.errors.length} notes=${result.notes.length} tempFile=${crawlPagesTempFileId}`
@@ -290,16 +314,61 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     return;
   }
 
+  if (req.method === 'POST' && req.url === '/crawl/stop') {
+    const body = await readJson<{ jobId?: string }>(req);
+    const jobId = body.jobId?.trim();
+    if (!jobId) {
+      sendJson(res, 400, { error: 'jobId is required.' });
+      return;
+    }
+
+    const controller = activeCrawlControllers.get(jobId);
+    if (!controller) {
+      sendJson(res, 404, { ok: false, message: 'No active crawl found for jobId.' });
+      return;
+    }
+
+    controller.abort();
+    activeCrawlControllers.delete(jobId);
+    sendJson(res, 200, { ok: true });
+    return;
+  }
+
   if (req.method === 'POST' && req.url === '/export') {
     const body = await readJson<ExportRequest>(req);
+    const requestController = createRequestAbortController(req);
+    const stopController = new AbortController();
+    requestController.signal.addEventListener('abort', () => stopController.abort(), { once: true });
+    activeExportControllers.set(body.jobId, stopController);
     const resolvedPages = await resolveExportPages(body);
     console.log(`[desktop-bridge] running export request for job=${body.jobId}`);
     const result = await handleExport({
       ...body,
       pages: resolvedPages
-    });
+    }, stopController.signal);
+    activeExportControllers.delete(body.jobId);
     console.log(`[desktop-bridge] export completed artifacts=${result.artifacts.length}`);
     sendJson(res, 200, result);
+    return;
+  }
+
+  if (req.method === 'POST' && req.url === '/export/stop') {
+    const body = await readJson<{ jobId?: string }>(req);
+    const jobId = body.jobId?.trim();
+    if (!jobId) {
+      sendJson(res, 400, { error: 'jobId is required.' });
+      return;
+    }
+
+    const controller = activeExportControllers.get(jobId);
+    if (!controller) {
+      sendJson(res, 404, { ok: false, message: 'No active export found for jobId.' });
+      return;
+    }
+
+    controller.abort();
+    activeExportControllers.delete(jobId);
+    sendJson(res, 200, { ok: true });
     return;
   }
 

@@ -9,6 +9,8 @@ type JobDetailsCardProps = {
   onExportPdf?: (job: JobRecord) => void;
   onExportEpub?: (job: JobRecord) => void;
   onExportAll?: (job: JobRecord) => void;
+  onStopCrawl?: (job: JobRecord) => void;
+  onStopExport?: (job: JobRecord) => void;
 };
 
 function stopReasonHelp(stopReason: string | undefined): string | null {
@@ -17,6 +19,7 @@ function stopReasonHelp(stopReason: string | undefined): string | null {
   if (stopReason === 'virtual-browser-crawl-error') return 'Desktop crawl failed. Check backend logs, target URL reachability, and selector configuration.';
   if (stopReason === 'out-of-domain-blocked') return 'Next URL left the configured domain. Update profile domain or pagination selector if needed.';
   if (stopReason === 'desktop-export-bridge-missing') return 'Selected job profile export destination is desktop, but export bridge is unavailable.';
+  if (stopReason === 'cancelled') return 'Job was cancelled by user.';
   return null;
 }
 
@@ -24,6 +27,7 @@ function statusColor(status: JobStatus): string {
   if (status === 'queued') return 'text-amber-700';
   if (status === 'running') return 'text-blue-700';
   if (status === 'completed') return 'text-green-700';
+  if (status === 'cancelled') return 'text-slate-600';
   return 'text-rose-700';
 }
 
@@ -34,7 +38,9 @@ export function JobDetailsCard({
   onExportHtml,
   onExportPdf,
   onExportEpub,
-  onExportAll
+  onExportAll,
+  onStopCrawl,
+  onStopExport
 }: JobDetailsCardProps) {
   const progress = getJobProgressInfo(job, isExporting ? 'export' : 'crawl');
   const percent = isExporting ? exportPercent : progress.percent;
@@ -69,6 +75,19 @@ export function JobDetailsCard({
         {job.stopReason && <p><strong>Stop reason:</strong> {job.stopReason}</p>}
         {stopReasonHelp(job.stopReason) && <p className="text-amber-700"><strong>Guidance:</strong> {stopReasonHelp(job.stopReason)}</p>}
         {job.error && <p className="text-rose-700"><strong>Error:</strong> {job.error}</p>}
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        {job.status === 'running' && !isExporting && (
+          <button type="button" onClick={() => onStopCrawl?.(job)} className="rounded bg-rose-700 px-2 py-1 text-xs text-white">
+            Stop crawl
+          </button>
+        )}
+        {isExporting && (
+          <button type="button" onClick={() => onStopExport?.(job)} className="rounded bg-rose-700 px-2 py-1 text-xs text-white">
+            Stop export
+          </button>
+        )}
       </div>
 
       <div className="mt-4 rounded-md border border-slate-200 bg-slate-50 p-3">

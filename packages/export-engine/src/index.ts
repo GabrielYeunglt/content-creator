@@ -37,7 +37,20 @@ export type ExportPipelineOptions = {
   outputEpubPath?: string;
   outputEpubManifestPath?: string;
   exportLayout?: ExportLayout;
+  abortSignal?: AbortSignal;
 };
+
+class ExportCancelledError extends Error {
+  constructor() {
+    super('Export cancelled by user request.');
+  }
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) {
+    throw new ExportCancelledError();
+  }
+}
 
 const defaultExportLayout: ExportLayout = {
   disableTableOfContents: false,
@@ -274,28 +287,32 @@ export function renderEpubLikeManifest(document: CanonicalDocument): string {
 }
 
 export async function runExportPipeline(options: ExportPipelineOptions): Promise<ExportArtifact[]> {
-  const { document, outputHtmlPath, outputPdfPath, outputEpubPath, outputEpubManifestPath, exportLayout } = options;
+  const { document, outputHtmlPath, outputPdfPath, outputEpubPath, outputEpubManifestPath, exportLayout, abortSignal } = options;
 
   const artifacts: ExportArtifact[] = [];
 
   if (outputHtmlPath) {
+    throwIfAborted(abortSignal);
     const html = renderCanonicalHtml(document, exportLayout);
     await writeTextFile(outputHtmlPath, html);
     artifacts.push({ format: 'html', path: outputHtmlPath });
   }
 
   if (outputPdfPath) {
+    throwIfAborted(abortSignal);
     await renderPdfFromCanonicalDocument({ document, outputPdfPath, exportLayout });
     artifacts.push({ format: 'pdf', path: outputPdfPath });
   }
 
   if (outputEpubManifestPath) {
+    throwIfAborted(abortSignal);
     const manifest = renderEpubLikeManifest(document);
     await writeTextFile(outputEpubManifestPath, manifest);
     artifacts.push({ format: 'epub-manifest', path: outputEpubManifestPath });
   }
 
   if (outputEpubPath) {
+    throwIfAborted(abortSignal);
     await renderEpubFromCanonicalDocument({ document, outputEpubPath, exportLayout });
     artifacts.push({ format: 'epub', path: outputEpubPath });
   }

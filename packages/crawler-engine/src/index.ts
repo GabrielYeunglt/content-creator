@@ -4,7 +4,8 @@ export type CrawlStopReason =
   | 'max-pages-reached'
   | 'error-threshold-reached'
   | 'out-of-domain-blocked'
-  | 'total-pages-reached';
+  | 'total-pages-reached'
+  | 'cancelled';
 
 export type SelectorType = 'css' | 'xpath';
 export type ExtractMode = 'text' | 'html' | 'attribute';
@@ -56,6 +57,7 @@ export type CrawlInteractionStep = {
 };
 
 export type VirtualBrowserCrawlOptions = {
+  jobId?: string;
   startUrl: string;
   domain: string;
   contentRule: CrawlSelectorRule;
@@ -75,6 +77,7 @@ export type VirtualBrowserCrawlOptions = {
     totalPages?: number;
     currentUrl?: string;
   }) => void;
+  abortSignal?: AbortSignal;
 };
 
 export type CrawledPage = {
@@ -110,7 +113,7 @@ type PlaywrightPageLike = {
   on: (event: 'requestfinished', handler: (request: RequestLike) => void) => void;
   off: (event: 'requestfinished', handler: (request: RequestLike) => void) => void;
   evaluate: <TResult, TArg = undefined>(fn: (arg: TArg) => TResult | Promise<TResult>, arg?: TArg) => Promise<TResult>;
-  waitForSelector: (selector: string, opts: { timeout: number }) => Promise<unknown>;
+  waitForSelector: (selector: string, opts: { timeout: number; state?: 'attached' | 'visible' }) => Promise<unknown>;
   click: (selector: string, opts: { timeout: number }) => Promise<void>;
   waitForTimeout: (timeout: number) => Promise<void>;
   context: () => {
@@ -124,6 +127,18 @@ type PlaywrightPageLike = {
     };
   };
 };
+
+class CrawlCancelledError extends Error {
+  constructor() {
+    super('Crawl cancelled by user request.');
+  }
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) {
+    throw new CrawlCancelledError();
+  }
+}
 
 type PlaywrightLike = {
   chromium: {
@@ -419,6 +434,7 @@ function toCssSelector(selectorType: SelectorType, selector: string): string {
 export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOptions): Promise<CrawlResult> {
   const { chromium } = await loadPlaywright();
   const {
+    jobId,
     startUrl,
     domain,
     contentRule,
@@ -429,7 +445,8 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
     interactionSteps = [],
     metadataRules = [],
     totalPagesRule,
-    onPageCrawled
+    onPageCrawled,
+    abortSignal
   } = options;
 
   console.log('Starting crawl with options:', options);
@@ -445,6 +462,7 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
   );
 
   console.log('[crawl] start', {
+    jobId,
     startUrl,
     domain,
     paginationMode: paginationRule.navigationMode ?? 'url-attribute',
@@ -467,6 +485,7 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
 
   try {
     while (currentUrl) {
+      throwIfAborted(abortSignal);
       console.log(`[crawl] loop start currentUrl=${currentUrl} pages=${pages.length}`);
       if (visited.has(currentUrl)) {
         console.log(`[crawl] already-visited-url ${currentUrl}`);
@@ -498,6 +517,7 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
 
       try {
         for (let attempt = 1; attempt <= maxRetriesPerPage + 1; attempt += 1) {
+          throwIfAborted(abortSignal);
           try {
             console.log(`[crawl] navigating to ${currentUrl} attempt=${attempt}`);
             await page.goto(currentUrl, { waitUntil: navigationWaitUntil, timeout: timeoutMs });
@@ -522,7 +542,7 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
 
             if (contentReadySelector) {
               const readySelector = toCssSelector(contentReadySelector.selectorType, contentReadySelector.selector);
-              await page.waitForSelector(readySelector, { timeout: contentReadySelector.timeoutMs ?? timeoutMs });
+              await page.waitForSelector(readySelector, { timeout: contentReadySelector.timeoutMs ?? timeoutMs, state: 'attached' });
             }
 
             visited.add(currentUrl);
@@ -668,6 +688,10 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
 
         currentUrl = resolvedNext;
       } catch (error) {
+        if (error instanceof CrawlCancelledError) {
+          notes.push('Crawl cancelled by user request.');
+          return { pagesProcessed: pages.length, stopReason: 'cancelled', pages, errors, notes };
+        }
         consecutiveErrors += 1;
         const message = error instanceof Error ? error.message : 'Unknown crawl processing error';
 
