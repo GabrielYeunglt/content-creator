@@ -267,6 +267,33 @@ async function waitForDifferentRuleValue(params: {
   return latestValue;
 }
 
+async function waitForContentReady(params: {
+  page: PlaywrightPageLike;
+  contentReadySelector: NonNullable<VirtualBrowserCrawlOptions['contentReadySelector']>;
+  contentRule: Pick<CrawlSelectorRule, 'selectorType' | 'selector' | 'extractMode' | 'attributeName'>;
+}): Promise<{ usedContentRuleFallback: boolean }> {
+  const { page, contentReadySelector, contentRule } = params;
+  const readySelector = toCssSelector(contentReadySelector.selectorType, contentReadySelector.selector);
+  const waitTimeoutMs = contentReadySelector.timeoutMs ?? 30000;
+
+  try {
+    await page.waitForSelector(readySelector, { timeout: waitTimeoutMs, state: 'attached' });
+    return { usedContentRuleFallback: false };
+  } catch (error) {
+    const extractedValue = await extractRuleValue(page, contentRule);
+    if (extractedValue && extractedValue.trim()) {
+      return { usedContentRuleFallback: true };
+    }
+
+    throw await augmentSelectorTimeoutError(
+      page,
+      contentReadySelector.selectorType,
+      contentReadySelector.selector,
+      error
+    );
+  }
+}
+
 function resolveUrlPatternNext(currentUrl: string): string | null {
   try {
     const url = new URL(currentUrl);
@@ -603,11 +630,20 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
             }
 
             if (contentReadySelector) {
-              const readySelector = toCssSelector(contentReadySelector.selectorType, contentReadySelector.selector);
-              try {
-                await page.waitForSelector(readySelector, { timeout: contentReadySelector.timeoutMs ?? timeoutMs, state: 'attached' });
-              } catch (error) {
-                throw await augmentSelectorTimeoutError(page, contentReadySelector.selectorType, contentReadySelector.selector, error);
+              const readiness = await waitForContentReady({
+                page,
+                contentReadySelector: {
+                  ...contentReadySelector,
+                  timeoutMs: contentReadySelector.timeoutMs ?? timeoutMs
+                },
+                contentRule
+              });
+
+              if (readiness.usedContentRuleFallback) {
+                notes.push(
+                  `Content-ready selector timed out at ${currentUrl}; continuing because content selector extracted a non-empty value.`
+                );
+                console.log(`[crawl] content-ready fallback used at ${currentUrl}`);
               }
             }
 
