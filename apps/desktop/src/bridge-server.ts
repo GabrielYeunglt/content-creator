@@ -39,6 +39,14 @@ type CrawlPageRecord = {
   scripts: string[];
 };
 
+type CrawlProgressRecord = {
+  pagesProcessed: number;
+  totalPages?: number;
+  currentUrl?: string;
+  stage?: 'page-crawled' | 'resolving-next-url' | 'next-url-resolved';
+  updatedAt: string;
+};
+
 const crawlPayloadDir = join(tmpdir(), 'content-creator-crawl-payloads');
 
 function crawlPayloadPath(fileId: string): string {
@@ -61,6 +69,7 @@ const port = Number.parseInt(process.env.CONTENT_CREATOR_BRIDGE_PORT ?? '8787', 
 const host = process.env.CONTENT_CREATOR_BRIDGE_HOST ?? '127.0.0.1';
 const artifactRoot = resolve(process.env.CONTENT_CREATOR_ARTIFACTS_DIR ?? '.content-creator-artifacts');
 const activeCrawlControllers = new Map<string, AbortController>();
+const activeCrawlProgress = new Map<string, CrawlProgressRecord>();
 const activeExportControllers = new Map<string, AbortController>();
 
 function createRequestAbortController(req: IncomingMessage): AbortController {
@@ -285,6 +294,24 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     return;
   }
 
+  if (req.method === 'GET' && req.url.startsWith('/crawl/progress')) {
+    const requestUrl = new URL(req.url, `http://${host}:${port}`);
+    const jobId = requestUrl.searchParams.get('jobId')?.trim();
+    if (!jobId) {
+      sendJson(res, 400, { error: 'jobId is required.' });
+      return;
+    }
+
+    const progress = activeCrawlProgress.get(jobId);
+    if (!progress) {
+      sendJson(res, 404, { ok: false, message: 'No active crawl progress found for jobId.' });
+      return;
+    }
+
+    sendJson(res, 200, { ok: true, progress });
+    return;
+  }
+
   if (req.method === 'POST' && req.url === '/crawl') {
     const body = await readJson<unknown>(req);
     const request = coerceCrawlOptions(body);
@@ -297,11 +324,34 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     requestController.signal.addEventListener('abort', relayAbort, { once: true });
     if (jobId) {
       activeCrawlControllers.set(jobId, stopController);
+      activeCrawlProgress.set(jobId, {
+        pagesProcessed: 0,
+        currentUrl: request.startUrl,
+        stage: 'resolving-next-url',
+        updatedAt: new Date().toISOString()
+      });
     }
     console.log('[desktop-bridge] running crawl request');
-    const result = await crawlWithVirtualBrowser({ ...request, abortSignal: stopController.signal });
+    const result = await crawlWithVirtualBrowser({
+      ...request,
+      abortSignal: stopController.signal,
+      onPageCrawled: (payload) => {
+        if (!jobId) {
+          return;
+        }
+
+        activeCrawlProgress.set(jobId, {
+          pagesProcessed: payload.pagesProcessed,
+          totalPages: payload.totalPages,
+          currentUrl: payload.currentUrl,
+          stage: payload.stage,
+          updatedAt: new Date().toISOString()
+        });
+      }
+    });
     if (jobId) {
       activeCrawlControllers.delete(jobId);
+      activeCrawlProgress.delete(jobId);
     }
     const crawlPagesTempFileId = await writeCrawlPagesTempFile(result.pages as CrawlPageRecord[]);
     console.log(
@@ -330,6 +380,7 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
 
     controller.abort();
     activeCrawlControllers.delete(jobId);
+    activeCrawlProgress.delete(jobId);
     sendJson(res, 200, { ok: true });
     return;
   }

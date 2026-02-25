@@ -1,5 +1,6 @@
 import { buildCanonicalDocument } from '../../../../packages/core/src';
 import { appendJobLog, updateJob, updateJobStatus } from './jobStorage';
+import { fetchDesktopCrawlProgress } from './httpDesktopBridge';
 import type { JobMode, JobProfile } from '../types/jobProfile';
 import type { ExtractedPageRecord, JobRecord } from '../types/job';
 import type { WebsiteProfile } from '../types/profile';
@@ -19,6 +20,7 @@ type VirtualBrowserCrawlRequest = {
     pagesProcessed: number;
     totalPages?: number;
     currentUrl?: string;
+    stage?: 'page-crawled' | 'resolving-next-url' | 'next-url-resolved';
   }) => void;
 
   startUrl: string;
@@ -167,6 +169,18 @@ function getDesktopExportBridge(): ((request: unknown) => Promise<unknown>) | nu
   return typeof bridge === 'function' ? bridge : null;
 }
 
+function crawlStageLabel(stage?: 'page-crawled' | 'resolving-next-url' | 'next-url-resolved'): string {
+  if (stage === 'resolving-next-url') {
+    return 'Resolving next page URL';
+  }
+
+  if (stage === 'next-url-resolved') {
+    return 'Next page URL resolved';
+  }
+
+  return 'Page captured';
+}
+
 export async function runCrawlJob(jobId: string, options: RunnerOptions): Promise<void> {
   const { onJobsUpdated, profile, startUrl, startUrls, jobProfile } = options;
 
@@ -231,58 +245,98 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
       ))?.[1];
       return !(overrideValue?.trim());
     });
-    const responses = await Promise.all(urlsToRun.map(async (url) => bridge({
-      jobId,
-      startUrl: url,
-      domain: normalizeDomain(profile.domain),
-      contentRule: {
-        selectorType: primaryRule.selectorType,
-        selector: jobProfile?.contentSelectorOverride ?? primaryRule.selector,
-        extractMode: primaryRule.extractMode,
-        attributeName: primaryRule.attributeName,
-        attributeUrlMode: primaryRule.attributeUrlMode
-      },
-      metadataRules: activeMetadataRules.map((rule) => ({
-        fieldType: rule.fieldType,
-        customFieldName: rule.customFieldName,
-        selectorType: rule.selectorType,
-        selector: rule.selector,
-        extractMode: rule.extractMode,
-        attributeName: rule.attributeName,
-        attributeUrlMode: rule.attributeUrlMode
-      })),
-      paginationRule: {
-        selectorType: profile.paginationRule.selectorType,
-        selector: jobProfile?.paginationSelectorOverride ?? profile.paginationRule.selector,
-        attributeName: profile.paginationRule.attributeName,
-        navigationMode: profile.paginationRule.navigationMode,
-        postNavigationDelaySeconds: profile.paginationRule.postNavigationDelaySeconds
-      },
-      totalPagesRule: profile.totalPagesRule
-        ? {
-          selectorType: profile.totalPagesRule.selectorType,
-          selector: jobProfile?.totalPagesSelectorOverride ?? profile.totalPagesRule.selector,
-          attributeName: profile.totalPagesRule.attributeName
+    const responses = await Promise.all(urlsToRun.map(async (url) => {
+      let isProgressPollingActive = true;
+      let isProgressRequestInFlight = false;
+
+      const progressTimer = window.setInterval(() => {
+        if (!isProgressPollingActive || isProgressRequestInFlight) {
+          return;
         }
-        : undefined,
-      stopRules: {
-        maxPages,
-        maxConsecutiveErrors: 3
-      },
-      contentReadySelector: {
-        selectorType: primaryRule.selectorType,
-        selector: jobProfile?.contentSelectorOverride ?? primaryRule.selector,
-        timeoutMs: 15000
-      },
-      onPageCrawled: ({ pagesProcessed, totalPages, currentUrl }) => {
-        const detail = totalPages ? `${pagesProcessed}/${totalPages} pages crawled` : `${pagesProcessed} pages crawled`;
-        onJobsUpdated(updateJob(jobId, {
-          pagesProcessed,
-          lastVisitedUrl: currentUrl,
-          note: `Crawling in progress: ${detail}.`
-        }));
+
+        isProgressRequestInFlight = true;
+        void fetchDesktopCrawlProgress(jobId)
+          .then((progress) => {
+            if (!progress || !isProgressPollingActive) {
+              return;
+            }
+
+            const detail = progress.totalPages
+              ? `${progress.pagesProcessed}/${progress.totalPages} pages crawled`
+              : `${progress.pagesProcessed} pages crawled`;
+
+            onJobsUpdated(updateJob(jobId, {
+              pagesProcessed: progress.pagesProcessed,
+              lastVisitedUrl: progress.currentUrl,
+              note: `Crawling in progress: ${detail}. ${crawlStageLabel(progress.stage)}.`
+            }));
+          })
+          .catch(() => {
+            // Ignore polling failures so crawl execution can continue.
+          })
+          .finally(() => {
+            isProgressRequestInFlight = false;
+          });
+      }, 700);
+
+      try {
+        return await bridge({
+          jobId,
+          startUrl: url,
+          domain: normalizeDomain(profile.domain),
+          contentRule: {
+            selectorType: primaryRule.selectorType,
+            selector: jobProfile?.contentSelectorOverride ?? primaryRule.selector,
+            extractMode: primaryRule.extractMode,
+            attributeName: primaryRule.attributeName,
+            attributeUrlMode: primaryRule.attributeUrlMode
+          },
+          metadataRules: activeMetadataRules.map((rule) => ({
+            fieldType: rule.fieldType,
+            customFieldName: rule.customFieldName,
+            selectorType: rule.selectorType,
+            selector: rule.selector,
+            extractMode: rule.extractMode,
+            attributeName: rule.attributeName,
+            attributeUrlMode: rule.attributeUrlMode
+          })),
+          paginationRule: {
+            selectorType: profile.paginationRule.selectorType,
+            selector: jobProfile?.paginationSelectorOverride ?? profile.paginationRule.selector,
+            attributeName: profile.paginationRule.attributeName,
+            navigationMode: profile.paginationRule.navigationMode,
+            postNavigationDelaySeconds: profile.paginationRule.postNavigationDelaySeconds
+          },
+          totalPagesRule: profile.totalPagesRule
+            ? {
+              selectorType: profile.totalPagesRule.selectorType,
+              selector: jobProfile?.totalPagesSelectorOverride ?? profile.totalPagesRule.selector,
+              attributeName: profile.totalPagesRule.attributeName
+            }
+            : undefined,
+          stopRules: {
+            maxPages,
+            maxConsecutiveErrors: 3
+          },
+          contentReadySelector: {
+            selectorType: primaryRule.selectorType,
+            selector: jobProfile?.contentSelectorOverride ?? primaryRule.selector,
+            timeoutMs: 15000
+          },
+          onPageCrawled: ({ pagesProcessed, totalPages, currentUrl, stage }) => {
+            const detail = totalPages ? `${pagesProcessed}/${totalPages} pages crawled` : `${pagesProcessed} pages crawled`;
+            onJobsUpdated(updateJob(jobId, {
+              pagesProcessed,
+              lastVisitedUrl: currentUrl,
+              note: `Crawling in progress: ${detail}. ${crawlStageLabel(stage)}.`
+            }));
+          }
+        });
+      } finally {
+        isProgressPollingActive = false;
+        window.clearInterval(progressTimer);
       }
-    })));
+    }));
 
     const shouldUseCrawlPagesTempFile = responses.length === 1;
 
