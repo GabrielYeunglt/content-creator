@@ -76,6 +76,7 @@ export type VirtualBrowserCrawlOptions = {
     pagesProcessed: number;
     totalPages?: number;
     currentUrl?: string;
+    stage?: 'page-crawled' | 'resolving-next-url' | 'next-url-resolved';
   }) => void;
   abortSignal?: AbortSignal;
 };
@@ -752,7 +753,8 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
         onPageCrawled?.({
           pagesProcessed: pages.length,
           totalPages: totalPagesTarget ?? undefined,
-          currentUrl
+          currentUrl,
+          stage: 'page-crawled'
         });
 
         console.log(`[crawl] page saved url=${currentUrl} stylesheets=${domAssets.stylesheets.length}+${networkStylesheets.size} scripts=${domAssets.scripts.length}+${networkScripts.size}`);
@@ -776,6 +778,13 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
           return { pagesProcessed: pages.length, stopReason: 'total-pages-reached', pages, errors, notes };
         }
 
+        onPageCrawled?.({
+          pagesProcessed: pages.length,
+          totalPages: totalPagesTarget ?? undefined,
+          currentUrl,
+          stage: 'resolving-next-url'
+        });
+
         const resolvedNext = await resolveNextUrl({
           page,
           currentUrl,
@@ -783,6 +792,14 @@ export async function crawlWithVirtualBrowser(options: VirtualBrowserCrawlOption
           timeoutMs
         });
         console.log(`[crawl] resolved next url from ${currentUrl} => ${resolvedNext}`);
+
+        onPageCrawled?.({
+          pagesProcessed: pages.length,
+          totalPages: totalPagesTarget ?? undefined,
+          currentUrl: resolvedNext ?? currentUrl,
+          stage: 'next-url-resolved'
+        });
+
         if (!resolvedNext) {
           console.log(`[crawl] no-next-button at ${currentUrl}`);
           return { pagesProcessed: pages.length, stopReason: 'no-next-button', pages, errors, notes };

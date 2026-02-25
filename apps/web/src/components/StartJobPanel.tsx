@@ -138,6 +138,8 @@ export function StartJobPanel({ profiles, jobProfiles, jobs, onJobCreated, onReq
   async function handleStopCrawl(job: JobRecord): Promise<void> {
     try {
       await stopDesktopCrawl(job.id);
+      setIsSubmitting(false);
+      setMessage('Crawl stop requested. You can start a new job now.');
       onJobCreated(updateJob(job.id, {
         status: 'cancelled',
         completedAt: new Date().toISOString(),

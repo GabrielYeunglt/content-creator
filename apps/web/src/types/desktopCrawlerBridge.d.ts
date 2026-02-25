@@ -47,6 +47,7 @@ declare global {
         pagesProcessed: number;
         totalPages?: number;
         currentUrl?: string;
+        stage?: 'page-crawled' | 'resolving-next-url' | 'next-url-resolved';
       }) => void;
     }) => Promise<{
       pagesProcessed: number;
