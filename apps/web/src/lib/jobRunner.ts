@@ -14,6 +14,7 @@ type RunnerOptions = {
 };
 
 type VirtualBrowserCrawlRequest = {
+  jobId?: string;
   onPageCrawled?: (payload: {
     pagesProcessed: number;
     totalPages?: number;
@@ -231,6 +232,7 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
       return !(overrideValue?.trim());
     });
     const responses = await Promise.all(urlsToRun.map(async (url) => bridge({
+      jobId,
       startUrl: url,
       domain: normalizeDomain(profile.domain),
       contentRule: {
@@ -298,6 +300,7 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
 
     const allPagesProcessed = responses.reduce((sum, response) => sum + response.pagesProcessed, 0);
     const lastResult = responses[responses.length - 1];
+    const isCancelled = responses.some((result) => result.stopReason === 'cancelled');
 
     console.log('Crawl result:', responses.map((result) => ({
       stopReason: result.stopReason,
@@ -312,7 +315,7 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
     });
 
     const completed = updateJob(jobId, {
-      status: 'completed',
+      status: isCancelled ? 'cancelled' : 'completed',
       completedAt: new Date().toISOString(),
       pagesProcessed: allPagesProcessed,
       lastVisitedUrl: extractedPages[extractedPages.length - 1]?.url,
@@ -328,7 +331,9 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
         ,metadata: consolidated.metadata
       },
       stopReason: lastResult?.stopReason ?? 'completed',
-      note: `Virtual-browser crawl completed for ${urlsToRun.length} URL(s). Final stop reason: ${lastResult?.stopReason ?? 'completed'}.`
+      note: isCancelled
+        ? 'Crawl stopped by user.'
+        : `Virtual-browser crawl completed for ${urlsToRun.length} URL(s). Final stop reason: ${lastResult?.stopReason ?? 'completed'}.`
     });
 
     onJobsUpdated(completed);

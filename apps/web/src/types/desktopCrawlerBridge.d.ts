@@ -3,6 +3,7 @@ export {};
 declare global {
   interface Window {
     __CONTENT_CREATOR_DESKTOP_CRAWLER__?: (request: {
+      jobId?: string;
       startUrl: string;
       domain: string;
       contentRule: {

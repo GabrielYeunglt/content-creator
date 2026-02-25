@@ -3,6 +3,8 @@ import { runCrawlJob } from '../lib/jobRunner';
 import { appendJob } from '../lib/jobStorage';
 import { readRuntimeBridgeStatus } from '../lib/runtimeBridgeStatus';
 import { exportJobAllViaDesktop, exportJobAsEpub, exportJobAsHtml, exportJobAsPdf } from '../lib/exportActions';
+import { stopDesktopCrawl, stopDesktopExport } from '../lib/httpDesktopBridge';
+import { appendJobLog, updateJob } from '../lib/jobStorage';
 import type { JobMode, JobProfile } from '../types/jobProfile';
 import type { JobRecord } from '../types/job';
 import type { WebsiteProfile } from '../types/profile';
@@ -130,6 +132,36 @@ export function StartJobPanel({ profiles, jobProfiles, jobs, onJobCreated, onReq
       if (updated) onJobCreated(updated);
     } finally {
       setExportingJobId(null);
+    }
+  }
+
+  async function handleStopCrawl(job: JobRecord): Promise<void> {
+    try {
+      await stopDesktopCrawl(job.id);
+      onJobCreated(updateJob(job.id, {
+        status: 'cancelled',
+        completedAt: new Date().toISOString(),
+        stopReason: 'cancelled',
+        note: 'Crawl stopped by user.'
+      }));
+      onJobCreated(appendJobLog(job.id, { level: 'warn', message: 'User requested crawl stop.' }));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown stop error';
+      onJobCreated(appendJobLog(job.id, { level: 'error', message: `Failed to stop crawl: ${message}` }));
+    }
+  }
+
+  async function handleStopExport(job: JobRecord): Promise<void> {
+    try {
+      await stopDesktopExport(job.id);
+      setExportingJobId(null);
+      onJobCreated(updateJob(job.id, {
+        note: 'Export stopped by user.'
+      }));
+      onJobCreated(appendJobLog(job.id, { level: 'warn', message: 'User requested export stop.' }));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown stop error';
+      onJobCreated(appendJobLog(job.id, { level: 'error', message: `Failed to stop export: ${message}` }));
     }
   }
 
@@ -386,6 +418,8 @@ export function StartJobPanel({ profiles, jobProfiles, jobs, onJobCreated, onReq
             onExportPdf={(job) => void runExport(job, exportJobAsPdf)}
             onExportEpub={(job) => void runExport(job, exportJobAsEpub)}
             onExportAll={(job) => void runExport(job, exportJobAllViaDesktop)}
+            onStopCrawl={(job) => void handleStopCrawl(job)}
+            onStopExport={(job) => void handleStopExport(job)}
           />
         </div>
       )}
