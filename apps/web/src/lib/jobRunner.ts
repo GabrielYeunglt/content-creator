@@ -41,6 +41,13 @@ type VirtualBrowserCrawlRequest = {
     attributeName?: string;
     attributeUrlMode?: 'value' | 'fetch-image-data-url';
   }>;
+  preExtractionRules?: Array<{
+    selectorType: 'css' | 'xpath';
+    selector: string;
+    action: 'click';
+    timeoutMs?: number;
+  }>;
+  preExtractionMaxFailures?: number;
   paginationRule: {
     selectorType: 'css' | 'xpath';
     selector: string;
@@ -300,6 +307,13 @@ export async function runCrawlJob(jobId: string, options: RunnerOptions): Promis
             attributeName: rule.attributeName,
             attributeUrlMode: rule.attributeUrlMode
           })),
+          preExtractionRules: (profile.preExtractionRules ?? []).map((rule) => ({
+            selectorType: rule.selectorType,
+            selector: rule.selector,
+            action: rule.action,
+            timeoutMs: rule.timeoutMs
+          })),
+          preExtractionMaxFailures: Math.max(1, Number(profile.preExtractionMaxFailures) || 3),
           paginationRule: {
             selectorType: profile.paginationRule.selectorType,
             selector: jobProfile?.paginationSelectorOverride ?? profile.paginationRule.selector,

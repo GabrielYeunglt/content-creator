@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { extractFieldFromHtml, extractNextUrlFromHtml } from '../lib/selectorEval';
 import {
   createMetadataExtractionRule,
+  createPreExtractionRule,
   type AttributeUrlMode,
   type ExtractMode,
   type MetadataFieldType,
@@ -30,6 +31,10 @@ export function ProfileEditorForm({ mode, draft, onChange, onSave, onCancel }: P
 
   function addMetadataRule() {
     onChange('extractionRules', [...draft.extractionRules, createMetadataExtractionRule()]);
+  }
+
+  function addPreExtractionRule() {
+    onChange('extractionRules', [...draft.extractionRules, createPreExtractionRule()]);
   }
 
   function removeRule(ruleId: string) {
@@ -280,6 +285,56 @@ export function ProfileEditorForm({ mode, draft, onChange, onSave, onCancel }: P
             {addableRules.map((rule) => (
               <div key={rule.id} style={{ border: '1px solid #eee', padding: '0.5rem' }}>
                 <div style={{ display: 'grid', gap: '0.5rem' }}>
+                  {rule.type === 'pre-extraction' && (
+                    <>
+                      <label>
+                        Action
+                        <select
+                          value={rule.action ?? 'click'}
+                          onChange={(event) => updateExtractionRule(rule.id, { action: event.target.value as 'click' })}
+                        >
+                          <option value="click">Click</option>
+                        </select>
+                      </label>
+
+                      <label>
+                        Selector Type
+                        <select
+                          value={rule.selectorType}
+                          onChange={(event) => updateExtractionRule(rule.id, { selectorType: event.target.value as SelectorType })}
+                        >
+                          <option value="css">CSS</option>
+                          <option value="xpath">XPath</option>
+                        </select>
+                      </label>
+
+                      <label>
+                        Selector
+                        <input
+                          value={rule.selector}
+                          onChange={(event) => updateExtractionRule(rule.id, { selector: event.target.value })}
+                          style={{ width: '100%' }}
+                        />
+                      </label>
+
+                      <label>
+                        Timeout (ms)
+                        <input
+                          type="number"
+                          min={0}
+                          step={100}
+                          value={rule.timeoutMs ?? 5000}
+                          onChange={(event) => {
+                            const parsed = Number.parseInt(event.target.value, 10);
+                            updateExtractionRule(rule.id, { timeoutMs: Number.isFinite(parsed) && parsed >= 0 ? parsed : 0 });
+                          }}
+                        />
+                      </label>
+                    </>
+                  )}
+
+                  {rule.type === 'metadata' && (
+                    <>
                   <label>
                     Field Type
                     <select
@@ -363,6 +418,8 @@ export function ProfileEditorForm({ mode, draft, onChange, onSave, onCancel }: P
                       <option value="fetch-image-data-url">Fetch image and store as data URL</option>
                     </select>
                   </label>
+                    </>
+                  )}
 
                   <div>
                     <button type="button" onClick={() => removeRule(rule.id)}>
@@ -375,7 +432,10 @@ export function ProfileEditorForm({ mode, draft, onChange, onSave, onCancel }: P
 
             <div>
               <button type="button" onClick={addMetadataRule}>
-                Add Extraction Rule
+                Add Metadata Rule
+              </button>
+              <button type="button" onClick={addPreExtractionRule} style={{ marginLeft: '0.5rem' }}>
+                Add Pre-extraction Action
               </button>
             </div>
           </div>
@@ -391,6 +451,15 @@ export function ProfileEditorForm({ mode, draft, onChange, onSave, onCancel }: P
                 min={1}
                 value={draft.maxPages}
                 onChange={(event) => onChange('maxPages', Number.parseInt(event.target.value, 10) || 1)}
+              />
+            </label>
+            <label>
+              Pre-extraction max failures before skipping
+              <input
+                type="number"
+                min={1}
+                value={draft.preExtractionMaxFailures}
+                onChange={(event) => onChange('preExtractionMaxFailures', Math.max(1, Number.parseInt(event.target.value, 10) || 1))}
               />
             </label>
             <label>

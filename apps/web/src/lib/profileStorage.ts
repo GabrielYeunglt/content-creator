@@ -1,5 +1,6 @@
 import {
   createDefaultExtractionRules,
+  createPreExtractionRule,
   createDefaultProfileDraft,
   type ProfileDraft,
   type SelectorType,
@@ -96,6 +97,16 @@ function sanitizeProfile(candidate: Partial<WebsiteProfile>): WebsiteProfile | n
         attributeName: candidate.totalPagesRule.attributeName?.trim() || undefined
       }
       : undefined,
+    preExtractionRules: (candidate.preExtractionRules ?? [])
+      .filter((rule) => rule.selector.trim().length > 0)
+      .map((rule) => ({
+        id: rule.id ?? crypto.randomUUID(),
+        selectorType: validSelectorType(rule.selectorType) ? rule.selectorType : 'css',
+        selector: rule.selector.trim(),
+        action: 'click' as const,
+        timeoutMs: Math.max(0, Number(rule.timeoutMs) || 5000)
+      })),
+    preExtractionMaxFailures: Math.max(1, Number(candidate.preExtractionMaxFailures) || 3),
     stopRules: {
       stopWhenNoNextButton: Boolean(candidate.stopRules.stopWhenNoNextButton),
       stopWhenUrlVisited: Boolean(candidate.stopRules.stopWhenUrlVisited),
@@ -124,6 +135,11 @@ function validateProfileDraft(draft: ProfileDraft): { ok: true } | { ok: false; 
   const waitMax = Math.max(0, Number(draft.multiJobWaitMaxSeconds) || 0);
   if (waitMin > waitMax) {
     return { ok: false, error: 'Multi-job wait range min must be less than or equal to max.' };
+  }
+
+  const preExtractionMaxFailures = Math.max(1, Number(draft.preExtractionMaxFailures) || 3);
+  if (!Number.isFinite(preExtractionMaxFailures) || preExtractionMaxFailures < 1) {
+    return { ok: false, error: 'Pre-extraction max failures must be at least 1.' };
   }
 
   const invalidRequiredRule = draft.extractionRules.find(
@@ -198,6 +214,16 @@ function buildProfile(draft: ProfileDraft, id: string, createdAt: string): Websi
         attributeName: totalPagesRule.attributeName.trim() || undefined
       }
       : undefined,
+    preExtractionRules: draft.extractionRules
+      .filter((rule) => rule.type === 'pre-extraction' && rule.selector.trim().length > 0)
+      .map((rule) => ({
+        id: rule.id || crypto.randomUUID(),
+        selectorType: rule.selectorType,
+        selector: rule.selector.trim(),
+        action: 'click' as const,
+        timeoutMs: Math.max(0, Number(rule.timeoutMs) || 5000)
+      })),
+    preExtractionMaxFailures: Math.max(1, Number(draft.preExtractionMaxFailures) || 3),
     stopRules: {
       stopWhenNoNextButton: true,
       stopWhenUrlVisited: true,
@@ -235,6 +261,7 @@ export function writeProfiles(profiles: WebsiteProfile[]): void {
 
 export function profileToDraft(profile: WebsiteProfile): ProfileDraft {
   const [defaultContent, defaultPagination, defaultTotalPages] = createDefaultExtractionRules();
+  const defaultPreExtraction = createPreExtractionRule();
   const primary = profile.selectorRules[0];
 
   return {
@@ -279,10 +306,19 @@ export function profileToDraft(profile: WebsiteProfile): ProfileDraft {
         selectorType: profile.totalPagesRule?.selectorType ?? defaultTotalPages.selectorType,
         selector: profile.totalPagesRule?.selector ?? defaultTotalPages.selector,
         attributeName: profile.totalPagesRule?.attributeName ?? defaultTotalPages.attributeName
-      }
+      },
+      ...(profile.preExtractionRules ?? []).map((rule) => ({
+        ...defaultPreExtraction,
+        id: rule.id,
+        selectorType: rule.selectorType,
+        selector: rule.selector,
+        action: rule.action,
+        timeoutMs: Math.max(0, Number(rule.timeoutMs) || 5000)
+      }))
     ],
     multiUrlOverrides: normalizeMetadataOverrides(profile.multiUrlOverrides as Record<string, string> | undefined),
     maxPages: profile.stopRules.maxPages,
+    preExtractionMaxFailures: Math.max(1, Number(profile.preExtractionMaxFailures) || 3),
     multiJobWaitMinSeconds: Math.max(0, Number(profile.multiJobWaitSecondsRange?.min) || 0),
     multiJobWaitMaxSeconds: Math.max(0, Number(profile.multiJobWaitSecondsRange?.max) || 0)
   };
